@@ -68,7 +68,11 @@ export function PinDialog({
         <Button
           className="h-12 text-base"
           disabled={pin.length < 4}
-          onClick={() => onSubmit(pin)}
+          onClick={() => {
+            const value = pin;
+            setPin("");
+            onSubmit(value);
+          }}
         >
           Lanjut
         </Button>
