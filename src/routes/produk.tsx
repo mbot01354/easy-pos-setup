@@ -67,7 +67,8 @@ const emptyDraft: Draft = {
   sell_price: "",
   cost_price: "",
   category_id: "none",
-  stock: "",
+  stock: "0",
+  unlimited: false,
 };
 
 function ProdukPage() {
