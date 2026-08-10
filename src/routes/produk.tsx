@@ -97,7 +97,7 @@ function ProdukPage() {
         sell_price: sell,
         cost_price: d.cost_price.trim() === "" ? null : parseRupiahInput(d.cost_price),
         category_id: d.category_id === "none" ? null : d.category_id,
-        stock: d.stock.trim() === "" ? null : parseRupiahInput(d.stock),
+        stock: d.unlimited ? null : d.stock.trim() === "" ? 0 : parseRupiahInput(d.stock),
         is_active: true,
       };
       return saveProduct(product);
