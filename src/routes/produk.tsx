@@ -255,12 +255,22 @@ function ProdukPage() {
                 <Input
                   id="stok"
                   inputMode="numeric"
-                  placeholder="Kosongkan = tidak terbatas"
-                  value={draft.stock}
+                  placeholder="0"
+                  disabled={draft.unlimited}
+                  value={draft.unlimited ? "" : draft.stock}
                   onChange={(e) => setDraft({ ...draft, stock: e.target.value })}
                 />
+                <label className="mt-2 flex items-center gap-2 text-sm text-foreground">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-[var(--color-primary)]"
+                    checked={draft.unlimited}
+                    onChange={(e) => setDraft({ ...draft, unlimited: e.target.checked })}
+                  />
+                  Stok tidak terbatas
+                </label>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Kosong = tidak terbatas · 0 = habis · angka = stok terbatas
+                  Kosong = 0 (habis) · angka = stok terbatas
                 </p>
               </div>
             </div>
