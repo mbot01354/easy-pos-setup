@@ -172,7 +172,8 @@ function ProdukPage() {
                     sell_price: String(p.sell_price),
                     cost_price: p.cost_price === null ? "" : String(p.cost_price),
                     category_id: p.category_id ?? "none",
-                    stock: p.stock === null ? "" : String(p.stock),
+                    stock: p.stock === null ? "0" : String(p.stock),
+                    unlimited: p.stock === null,
                   })
                 }
               >
