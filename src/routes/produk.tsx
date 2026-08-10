@@ -58,6 +58,7 @@ type Draft = {
   cost_price: string;
   category_id: string;
   stock: string;
+  unlimited: boolean;
 };
 
 const emptyDraft: Draft = {
@@ -66,7 +67,8 @@ const emptyDraft: Draft = {
   sell_price: "",
   cost_price: "",
   category_id: "none",
-  stock: "",
+  stock: "0",
+  unlimited: false,
 };
 
 function ProdukPage() {
@@ -95,7 +97,7 @@ function ProdukPage() {
         sell_price: sell,
         cost_price: d.cost_price.trim() === "" ? null : parseRupiahInput(d.cost_price),
         category_id: d.category_id === "none" ? null : d.category_id,
-        stock: d.stock.trim() === "" ? null : parseRupiahInput(d.stock),
+        stock: d.unlimited ? null : d.stock.trim() === "" ? 0 : parseRupiahInput(d.stock),
         is_active: true,
       };
       return saveProduct(product);
@@ -170,7 +172,8 @@ function ProdukPage() {
                     sell_price: String(p.sell_price),
                     cost_price: p.cost_price === null ? "" : String(p.cost_price),
                     category_id: p.category_id ?? "none",
-                    stock: p.stock === null ? "" : String(p.stock),
+                    stock: p.stock === null ? "0" : String(p.stock),
+                    unlimited: p.stock === null,
                   })
                 }
               >
@@ -252,12 +255,22 @@ function ProdukPage() {
                 <Input
                   id="stok"
                   inputMode="numeric"
-                  placeholder="Kosongkan = tidak terbatas"
-                  value={draft.stock}
+                  placeholder="0"
+                  disabled={draft.unlimited}
+                  value={draft.unlimited ? "" : draft.stock}
                   onChange={(e) => setDraft({ ...draft, stock: e.target.value })}
                 />
+                <label className="mt-2 flex items-center gap-2 text-sm text-foreground">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-[var(--color-primary)]"
+                    checked={draft.unlimited}
+                    onChange={(e) => setDraft({ ...draft, unlimited: e.target.checked })}
+                  />
+                  Stok tidak terbatas
+                </label>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Kosong = tidak terbatas · 0 = habis · angka = stok terbatas
+                  Kosong = 0 (habis) · angka = stok terbatas
                 </p>
               </div>
             </div>
