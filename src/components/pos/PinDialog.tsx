@@ -22,8 +22,8 @@ export function PinDialog({
   const [pin, setPin] = useState("");
 
   useEffect(() => {
-    if (open) setPin("");
-  }, [open]);
+    setPin("");
+  }, [open, title, error]);
 
   const press = (key: string) => {
     if (key === "back") setPin((p) => p.slice(0, -1));
