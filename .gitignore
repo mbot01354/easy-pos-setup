@@ -30,3 +30,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local workspace tracking (Voyager-Vault protocol) — jangan ter-commit ke upstream
+memory_log.md
+ISSUES.md

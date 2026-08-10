@@ -259,6 +259,10 @@ export async function listTransactionItems(transactionId: string): Promise<Trans
   return reqToPromise(idx.getAll(transactionId) as IDBRequest<TransactionItem[]>);
 }
 
+export async function listAllTransactionItems(): Promise<TransactionItem[]> {
+  return getAll<TransactionItem>(STORES.transactionItems);
+}
+
 /* ---------------- Seed ---------------- */
 
 let seedPromise: Promise<void> | null = null;

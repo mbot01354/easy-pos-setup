@@ -42,9 +42,7 @@ export function PinDialog({
           {Array.from({ length: 6 }).map((_, i) => (
             <span
               key={i}
-              className={`h-3 w-3 rounded-full ${
-                i < pin.length ? "bg-primary" : "bg-muted"
-              }`}
+              className={`h-3 w-3 rounded-full ${i < pin.length ? "bg-primary" : "bg-muted"}`}
             />
           ))}
         </div>
