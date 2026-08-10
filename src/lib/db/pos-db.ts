@@ -291,7 +291,7 @@ async function runSeed() {
       sell_price: 15000,
       cost_price: 8000,
       category_id: "cat-makanan",
-      stock: null,
+      stock: 25,
       is_active: true,
     },
     {
@@ -311,7 +311,7 @@ async function runSeed() {
       sell_price: 5000,
       cost_price: 1500,
       category_id: "cat-minuman",
-      stock: null,
+      stock: 40,
       is_active: true,
     },
     {
@@ -348,5 +348,34 @@ async function runSeed() {
 
   for (const c of cats) catStore.put(c);
   for (const p of products) tx.objectStore(STORES.products).put(p);
+  await txDone(tx);
+}
+
+/* ---------------- Hapus transaksi (kembalikan stok) ---------------- */
+
+export async function deleteTransaction(transactionId: string): Promise<void> {
+  const db = await openDb();
+  const tx = db.transaction(
+    [STORES.products, STORES.transactions, STORES.transactionItems],
+    "readwrite",
+  );
+  const itemStore = tx.objectStore(STORES.transactionItems);
+  const productStore = tx.objectStore(STORES.products);
+
+  const items = await reqToPromise(
+    itemStore.index("transaction_id").getAll(transactionId) as IDBRequest<TransactionItem[]>,
+  );
+
+  for (const item of items) {
+    const product = await reqToPromise(
+      productStore.get(item.product_id) as IDBRequest<Product | undefined>,
+    );
+    if (product && product.stock !== null) {
+      productStore.put({ ...product, stock: product.stock + item.qty });
+    }
+    itemStore.delete(item.id);
+  }
+
+  tx.objectStore(STORES.transactions).delete(transactionId);
   await txDone(tx);
 }
