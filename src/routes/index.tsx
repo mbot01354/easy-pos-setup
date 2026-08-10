@@ -185,67 +185,81 @@ function KasirPage() {
       )}
 
       <Sheet open={cartOpen} onOpenChange={setCartOpen}>
-        <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto">
-          <SheetHeader>
+        <SheetContent
+          side="bottom"
+          className="flex h-[80vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg"
+        >
+          <SheetHeader className="shrink-0 border-b border-border bg-card px-4 py-3">
             <SheetTitle>Keranjang</SheetTitle>
           </SheetHeader>
-          <div className="mt-4 space-y-3">
-            {cart.map((line) => (
-              <div key={line.product.id} className="flex items-center gap-2">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{line.product.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {rupiah(line.product.sell_price)} × {line.qty}
-                  </p>
+
+          <div className="no-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
+            {cart.length === 0 ? (
+              <p className="py-10 text-center text-sm text-muted-foreground">
+                Keranjang masih kosong.
+              </p>
+            ) : (
+              cart.map((line) => (
+                <div key={line.product.id} className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">{line.product.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {rupiah(line.product.sell_price)} × {line.qty}
+                    </p>
+                  </div>
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    onClick={() => setQty(line.product.id, line.qty - 1)}
+                  >
+                    <Minus className="h-4 w-4" />
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => setNumpadFor(line)}
+                    className="min-w-12 rounded-md border border-border px-2 py-2 text-center text-base font-bold tabular-nums"
+                  >
+                    {line.qty}
+                  </button>
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    onClick={() => {
+                      if (line.product.stock !== null && line.qty + 1 > line.product.stock) {
+                        toast.error(`Stok tinggal ${line.product.stock}`);
+                        return;
+                      }
+                      setQty(line.product.id, line.qty + 1);
+                    }}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                  <Button size="icon" variant="ghost" onClick={() => setQty(line.product.id, 0)}>
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
                 </div>
-                <Button
-                  size="icon"
-                  variant="outline"
-                  onClick={() => setQty(line.product.id, line.qty - 1)}
-                >
-                  <Minus className="h-4 w-4" />
-                </Button>
-                <button
-                  type="button"
-                  onClick={() => setNumpadFor(line)}
-                  className="min-w-12 rounded-md border border-border px-2 py-2 text-center text-base font-bold tabular-nums"
-                >
-                  {line.qty}
-                </button>
-                <Button
-                  size="icon"
-                  variant="outline"
-                  onClick={() => {
-                    if (
-                      line.product.stock !== null &&
-                      line.qty + 1 > line.product.stock
-                    ) {
-                      toast.error(`Stok tinggal ${line.product.stock}`);
-                      return;
-                    }
-                    setQty(line.product.id, line.qty + 1);
-                  }}
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
-                <Button size="icon" variant="ghost" onClick={() => setQty(line.product.id, 0)}>
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              </div>
-            ))}
+              ))
+            )}
           </div>
 
-          <div className="mt-5 flex items-center justify-between border-t border-border pt-4">
-            <span className="text-sm text-muted-foreground">Total</span>
-            <span className="text-2xl font-extrabold text-foreground">{rupiah(totalOmset)}</span>
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <Button variant="outline" className="h-12" onClick={() => pay("other")}>
-              Non-Tunai
-            </Button>
-            <Button className="h-12" onClick={() => pay("cash")}>
-              Bayar Tunai
-            </Button>
+          <div className="shrink-0 border-t border-border bg-card px-4 pb-5 pt-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Total</span>
+              <span className="text-2xl font-extrabold text-foreground">{rupiah(totalOmset)}</span>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <Button
+                variant="outline"
+                className="h-12"
+                disabled={cart.length === 0}
+                onClick={() => pay("other")}
+              >
+                Non-Tunai
+              </Button>
+              <Button className="h-12" disabled={cart.length === 0} onClick={() => pay("cash")}>
+                Bayar Tunai
+              </Button>
+            </div>
           </div>
         </SheetContent>
       </Sheet>
