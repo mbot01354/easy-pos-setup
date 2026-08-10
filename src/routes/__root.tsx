@@ -77,15 +77,22 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "POS Offline — Kasir UMKM Tanpa Internet" },
+      {
+        name: "description",
+        content:
+          "Aplikasi kasir offline untuk UMKM: transaksi cepat, kontrol stok, dan laporan laba, semua tersimpan di perangkat.",
+      },
+      { name: "author", content: "POS Offline" },
+      { property: "og:title", content: "POS Offline — Kasir UMKM Tanpa Internet" },
+      {
+        property: "og:description",
+        content: "Transaksi cepat, kontrol stok, dan laporan laba tanpa koneksi internet.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
+
     links: [
       {
         rel: "stylesheet",
@@ -121,6 +128,8 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
+      <Toaster position="top-center" richColors />
     </QueryClientProvider>
   );
 }
+
