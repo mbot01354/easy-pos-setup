@@ -58,6 +58,7 @@ type Draft = {
   cost_price: string;
   category_id: string;
   stock: string;
+  unlimited: boolean;
 };
 
 const emptyDraft: Draft = {
