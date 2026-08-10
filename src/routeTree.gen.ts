@@ -10,11 +10,24 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as LaporanRouteImport } from './routes/laporan'
+import { Route as PengaturanRouteImport } from './routes/pengaturan'
 import { Route as ProdukRouteImport } from './routes/produk'
+import { Route as RiwayatRouteImport } from './routes/riwayat'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LaporanRoute = LaporanRouteImport.update({
+  id: '/laporan',
+  path: '/laporan',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PengaturanRoute = PengaturanRouteImport.update({
+  id: '/pengaturan',
+  path: '/pengaturan',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProdukRoute = ProdukRouteImport.update({
@@ -22,31 +35,48 @@ const ProdukRoute = ProdukRouteImport.update({
   path: '/produk',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RiwayatRoute = RiwayatRouteImport.update({
+  id: '/riwayat',
+  path: '/riwayat',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/laporan': typeof LaporanRoute
+  '/pengaturan': typeof PengaturanRoute
   '/produk': typeof ProdukRoute
+  '/riwayat': typeof RiwayatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/laporan': typeof LaporanRoute
+  '/pengaturan': typeof PengaturanRoute
   '/produk': typeof ProdukRoute
+  '/riwayat': typeof RiwayatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/laporan': typeof LaporanRoute
+  '/pengaturan': typeof PengaturanRoute
   '/produk': typeof ProdukRoute
+  '/riwayat': typeof RiwayatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/produk'
+  fullPaths: '/' | '/laporan' | '/pengaturan' | '/produk' | '/riwayat'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/produk'
-  id: '__root__' | '/' | '/produk'
+  to: '/' | '/laporan' | '/pengaturan' | '/produk' | '/riwayat'
+  id: '__root__' | '/' | '/laporan' | '/pengaturan' | '/produk' | '/riwayat'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  LaporanRoute: typeof LaporanRoute
+  PengaturanRoute: typeof PengaturanRoute
   ProdukRoute: typeof ProdukRoute
+  RiwayatRoute: typeof RiwayatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -58,6 +88,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/laporan': {
+      id: '/laporan'
+      path: '/laporan'
+      fullPath: '/laporan'
+      preLoaderRoute: typeof LaporanRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pengaturan': {
+      id: '/pengaturan'
+      path: '/pengaturan'
+      fullPath: '/pengaturan'
+      preLoaderRoute: typeof PengaturanRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/produk': {
       id: '/produk'
       path: '/produk'
@@ -65,12 +109,22 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProdukRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/riwayat': {
+      id: '/riwayat'
+      path: '/riwayat'
+      fullPath: '/riwayat'
+      preLoaderRoute: typeof RiwayatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  LaporanRoute: LaporanRoute,
+  PengaturanRoute: PengaturanRoute,
   ProdukRoute: ProdukRoute,
+  RiwayatRoute: RiwayatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
