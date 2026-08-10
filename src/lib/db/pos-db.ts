@@ -109,7 +109,7 @@ export async function listCategories(): Promise<Category[]> {
   return rows.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
 }
 
-export async function saveCategory(input: Omit<Category, "id"> & { id?: string }) {
+export async function saveCategory(input: Omit<Category, "id"> & { id?: string | undefined }) {
   return put<Category>(STORES.categories, { ...input, id: input.id ?? newId() });
 }
 
@@ -134,7 +134,7 @@ export async function listProducts(): Promise<Product[]> {
   return rows.filter((p) => p.is_active).sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export async function saveProduct(input: Omit<Product, "id"> & { id?: string }) {
+export async function saveProduct(input: Omit<Product, "id"> & { id?: string | undefined }) {
   return put<Product>(STORES.products, { ...input, id: input.id ?? newId() });
 }
 
