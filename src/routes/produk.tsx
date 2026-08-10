@@ -88,7 +88,7 @@ function ProdukPage() {
       if (!d.name.trim()) throw new Error("Nama produk wajib diisi");
       const sell = parseRupiahInput(d.sell_price);
       if (sell <= 0) throw new Error("Harga jual wajib diisi");
-      const product: Omit<Product, "id"> & { id?: string } = {
+      const product: Omit<Product, "id"> & { id?: string | undefined } = {
         id: d.id,
         name: d.name.trim(),
         photo_path: d.photo_path,
