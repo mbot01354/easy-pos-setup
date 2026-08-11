@@ -103,6 +103,7 @@ function KasirPage() {
       const result = await checkout(cart, method);
       setCart([]);
       setCartOpen(false);
+      setReceipt({ transaction: result.transaction, items: result.items });
       await queryClient.invalidateQueries({ queryKey: ["products"] });
       await queryClient.invalidateQueries({ queryKey: ["transactions"] });
       toast.success(`Transaksi tersimpan — ${rupiah(result.transaction.total_omset)}`);
