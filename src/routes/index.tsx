@@ -6,11 +6,18 @@ import { toast } from "sonner";
 
 import { AppShell } from "@/components/pos/AppShell";
 import { NumpadDialog } from "@/components/pos/NumpadDialog";
+import { ReceiptDialog } from "@/components/pos/ReceiptDialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { checkout, listCategories, listProducts } from "@/lib/db/pos-db";
-import type { CartLine, PaymentMethod, Product } from "@/lib/db/types";
+import { checkout, getSettings, listCategories, listProducts } from "@/lib/db/pos-db";
+import type {
+  CartLine,
+  PaymentMethod,
+  Product,
+  Transaction,
+  TransactionItem,
+} from "@/lib/db/types";
 import { rupiah } from "@/lib/format";
 
 export const Route = createFileRoute("/")({
@@ -49,9 +56,14 @@ function KasirPage() {
   const [cart, setCart] = useState<CartLine[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [numpadFor, setNumpadFor] = useState<CartLine | null>(null);
+  const [receipt, setReceipt] = useState<{
+    transaction: Transaction;
+    items: TransactionItem[];
+  } | null>(null);
 
   const { data: products = [] } = useQuery({ queryKey: ["products"], queryFn: listProducts });
   const { data: categories = [] } = useQuery({ queryKey: ["categories"], queryFn: listCategories });
+  const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: getSettings });
 
   const filtered = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
@@ -91,6 +103,7 @@ function KasirPage() {
       const result = await checkout(cart, method);
       setCart([]);
       setCartOpen(false);
+      setReceipt({ transaction: result.transaction, items: result.items });
       await queryClient.invalidateQueries({ queryKey: ["products"] });
       await queryClient.invalidateQueries({ queryKey: ["transactions"] });
       toast.success(`Transaksi tersimpan — ${rupiah(result.transaction.total_omset)}`);
@@ -274,6 +287,14 @@ function KasirPage() {
           if (numpadFor) setQty(numpadFor.product.id, value);
           setNumpadFor(null);
         }}
+      />
+
+      <ReceiptDialog
+        open={receipt !== null}
+        onClose={() => setReceipt(null)}
+        transaction={receipt?.transaction ?? null}
+        items={receipt?.items ?? []}
+        settings={settings}
       />
     </AppShell>
   );

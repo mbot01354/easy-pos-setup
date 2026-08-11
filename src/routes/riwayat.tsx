@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Trash2 } from "lucide-react";
+import { Printer, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/pos/AppShell";
 import { PinDialog } from "@/components/pos/PinDialog";
+import { ReceiptDialog } from "@/components/pos/ReceiptDialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -62,6 +63,7 @@ function RiwayatPage() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [pinError, setPinError] = useState<string | null>(null);
+  const [receiptOpen, setReceiptOpen] = useState(false);
 
   const { data: transactions = [] } = useQuery({
     queryKey: ["transactions"],
@@ -231,6 +233,9 @@ function RiwayatPage() {
                   </span>
                 </div>
               </div>
+              <Button className="h-11 w-full" onClick={() => setReceiptOpen(true)}>
+                <Printer className="mr-2 h-4 w-4" /> Lihat &amp; cetak struk
+              </Button>
               <Button
                 variant="outline"
                 className="h-11 w-full text-destructive"
@@ -242,6 +247,14 @@ function RiwayatPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <ReceiptDialog
+        open={receiptOpen && detail !== null}
+        onClose={() => setReceiptOpen(false)}
+        transaction={detail}
+        items={detailItems}
+        settings={settings}
+      />
 
       <PinDialog
         open={pendingDelete !== null}
