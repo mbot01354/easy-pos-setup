@@ -9,12 +9,23 @@ import { NumpadDialog } from "@/components/pos/NumpadDialog";
 import { ReceiptDialog } from "@/components/pos/ReceiptDialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { checkout, getSettings, listCategories, listProducts } from "@/lib/db/pos-db";
+import {
+  checkout,
+  closeShift,
+  getOpenShift,
+  getSettings,
+  listCategories,
+  listProducts,
+  listShifts,
+  openShift,
+} from "@/lib/db/pos-db";
 import type {
   CartLine,
   PaymentMethod,
   Product,
+  Shift,
   Transaction,
   TransactionItem,
 } from "@/lib/db/types";
@@ -48,6 +59,14 @@ function useDebounced<T>(value: T, delay = 300) {
   return debounced;
 }
 
+function timeLabel(ts: number) {
+  return new Date(ts).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+}
+
+function dateLabel(ts: number) {
+  return new Date(ts).toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+}
+
 function KasirPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
@@ -60,10 +79,17 @@ function KasirPage() {
     transaction: Transaction;
     items: TransactionItem[];
   } | null>(null);
+  const [openCash, setOpenCash] = useState(false);
+  const [closeCash, setCloseCash] = useState(false);
+  const [shiftResult, setShiftResult] = useState<Shift | null>(null);
 
   const { data: products = [] } = useQuery({ queryKey: ["products"], queryFn: listProducts });
   const { data: categories = [] } = useQuery({ queryKey: ["categories"], queryFn: listCategories });
   const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: getSettings });
+  const { data: activeShift } = useQuery({ queryKey: ["open-shift"], queryFn: getOpenShift });
+  const { data: shifts = [] } = useQuery({ queryKey: ["shifts"], queryFn: listShifts });
+
+  const closedShifts = shifts.filter((s) => s.status === "closed");
 
   const filtered = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
@@ -99,8 +125,12 @@ function KasirPage() {
   };
 
   const pay = async (method: PaymentMethod) => {
+    if (!activeShift) {
+      toast.error("Buka shift dulu sebelum bertransaksi");
+      return;
+    }
     try {
-      const result = await checkout(cart, method);
+      const result = await checkout(cart, method, activeShift.id);
       setCart([]);
       setCartOpen(false);
       setReceipt({ transaction: result.transaction, items: result.items });
@@ -112,8 +142,86 @@ function KasirPage() {
     }
   };
 
+  const doOpenShift = async (openingCash: number) => {
+    try {
+      await openShift(openingCash);
+      await queryClient.invalidateQueries({ queryKey: ["open-shift"] });
+      await queryClient.invalidateQueries({ queryKey: ["shifts"] });
+      toast.success("Shift dibuka");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gagal membuka shift");
+    }
+  };
+
+  const doCloseShift = async (actual: number) => {
+    if (!activeShift) return;
+    try {
+      const closed = await closeShift(activeShift.id, actual);
+      setShiftResult(closed);
+      await queryClient.invalidateQueries({ queryKey: ["open-shift"] });
+      await queryClient.invalidateQueries({ queryKey: ["shifts"] });
+      await queryClient.invalidateQueries({ queryKey: ["transactions"] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gagal menutup shift");
+    }
+  };
+
   return (
     <AppShell title="Kasir">
+      <section className="mb-3 rounded-xl border border-border bg-card p-3">
+        {activeShift ? (
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-xs font-bold uppercase tracking-wide text-primary">Shift aktif</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Buka {timeLabel(activeShift.opened_at)} · Modal {rupiah(activeShift.opening_cash)}
+              </p>
+            </div>
+            <Button variant="outline" className="h-10 shrink-0" onClick={() => setCloseCash(true)}>
+              Tutup Shift
+            </Button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-xs font-bold uppercase tracking-wide text-foreground">
+                Shift belum dibuka
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Buka shift sebelum mulai transaksi kasir.
+              </p>
+            </div>
+            <Button className="h-10 shrink-0" onClick={() => setOpenCash(true)}>
+              Buka Shift
+            </Button>
+          </div>
+        )}
+
+        {!activeShift && closedShifts.length > 0 && (
+          <div className="mt-2 border-t border-border pt-2">
+            <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+              Shift terakhir
+            </p>
+            <div className="space-y-1">
+              {closedShifts.slice(0, 3).map((s) => (
+                <div key={s.id} className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">{dateLabel(s.opened_at)}</span>
+                  <span
+                    className={
+                      s.selisih !== null && s.selisih >= 0
+                        ? "font-medium"
+                        : "font-medium text-destructive"
+                    }
+                  >
+                    Selisih {s.selisih !== null ? rupiah(s.selisih) : "-"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
+
       <div className="relative mb-3">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
@@ -264,12 +372,16 @@ function KasirPage() {
               <Button
                 variant="outline"
                 className="h-12"
-                disabled={cart.length === 0}
+                disabled={cart.length === 0 || !activeShift}
                 onClick={() => pay("other")}
               >
                 Non-Tunai
               </Button>
-              <Button className="h-12" disabled={cart.length === 0} onClick={() => pay("cash")}>
+              <Button
+                className="h-12"
+                disabled={cart.length === 0 || !activeShift}
+                onClick={() => pay("cash")}
+              >
                 Bayar Tunai
               </Button>
             </div>
@@ -296,7 +408,65 @@ function KasirPage() {
         items={receipt?.items ?? []}
         settings={settings}
       />
+
+      <NumpadDialog
+        open={openCash}
+        title="Modal awal shift"
+        initialValue={0}
+        onClose={() => setOpenCash(false)}
+        onSubmit={async (value) => {
+          setOpenCash(false);
+          await doOpenShift(value);
+        }}
+      />
+
+      <NumpadDialog
+        open={closeCash}
+        title="Uang fisik di kasir (tutup shift)"
+        initialValue={0}
+        onClose={() => setCloseCash(false)}
+        onSubmit={async (value) => {
+          setCloseCash(false);
+          await doCloseShift(value);
+        }}
+      />
+
+      <Dialog open={shiftResult !== null} onOpenChange={(o) => !o && setShiftResult(null)}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle>Shift Ditutup</DialogTitle>
+          </DialogHeader>
+          {shiftResult && (
+            <div className="space-y-2 text-sm">
+              <Row label="Kas sistem" value={rupiah(shiftResult.closing_cash_system ?? 0)} />
+              <Row label="Kas aktual" value={rupiah(shiftResult.closing_cash_actual ?? 0)} />
+              <div
+                className={`mt-1 flex items-center justify-between border-t border-border pt-2 text-base font-bold ${
+                  (shiftResult.selisih ?? 0) >= 0 ? "text-foreground" : "text-destructive"
+                }`}
+              >
+                <span>Selisih</span>
+                <span className="tabular-nums">
+                  {shiftResult.selisih !== null ? rupiah(shiftResult.selisih) : "-"}
+                </span>
+              </div>
+            </div>
+          )}
+          <Button className="h-11 w-full" onClick={() => setShiftResult(null)}>
+            Tutup
+          </Button>
+        </DialogContent>
+      </Dialog>
     </AppShell>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-semibold tabular-nums">{value}</span>
+    </div>
   );
 }
 

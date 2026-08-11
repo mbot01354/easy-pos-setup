@@ -3,6 +3,7 @@ import type {
   Category,
   PaymentMethod,
   Product,
+  Shift,
   StoreSettings,
   Transaction,
   TransactionItem,
@@ -151,16 +152,7 @@ export async function getSettings(): Promise<StoreSettings> {
   const row = await reqToPromise(
     tx.objectStore(STORES.settings).get("default") as IDBRequest<StoreSettings | undefined>,
   );
-  return (
-    row ?? {
-      id: "default",
-      store_name: "Toko Saya",
-      business_type: "Warung",
-      logo_path: null,
-      pin_hash: null,
-      pin_salt: null,
-    }
-  );
+  return row ?? { ...DEFAULT_SETTINGS };
 }
 
 export async function saveSettings(settings: StoreSettings) {
@@ -181,9 +173,10 @@ export type CheckoutResult = {
 export async function checkout(
   lines: CartLine[],
   paymentMethod: PaymentMethod,
-  shiftId: string | null = null,
+  shiftId: string,
 ): Promise<CheckoutResult> {
   if (lines.length === 0) throw new Error("Keranjang kosong");
+  if (!shiftId) throw new Error("Buka shift dulu sebelum bertransaksi");
   const db = await openDb();
   const tx = db.transaction(
     [STORES.products, STORES.transactions, STORES.transactionItems],
@@ -195,6 +188,7 @@ export async function checkout(
   const items: TransactionItem[] = [];
   let totalOmset = 0;
   let totalHpp = 0;
+  let totalLaba = 0;
   let hasMissingHpp = false;
 
   for (const line of lines) {
@@ -208,8 +202,14 @@ export async function checkout(
     }
 
     totalOmset += fresh.sell_price * line.qty;
-    if (fresh.cost_price === null) hasMissingHpp = true;
-    else totalHpp += fresh.cost_price * line.qty;
+    // Laba hanya dihitung untuk produk yang HPP-nya terisi; tanpa HPP tidak usah
+    // diasumsikan 0 (PRD §4.5) — ditandai via has_missing_hpp.
+    if (fresh.cost_price === null) {
+      hasMissingHpp = true;
+    } else {
+      totalHpp += fresh.cost_price * line.qty;
+      totalLaba += (fresh.sell_price - fresh.cost_price) * line.qty;
+    }
 
     items.push({
       id: newId(),
@@ -233,7 +233,7 @@ export async function checkout(
     shift_id: shiftId,
     total_omset: totalOmset,
     total_hpp: totalHpp,
-    total_laba: totalOmset - totalHpp,
+    total_laba: totalLaba,
     has_missing_hpp: hasMissingHpp,
     payment_method: paymentMethod,
     status: "completed",
@@ -263,7 +263,92 @@ export async function listAllTransactionItems(): Promise<TransactionItem[]> {
   return getAll<TransactionItem>(STORES.transactionItems);
 }
 
+/* ---------------- Shift / Tutup Kasir ---------------- */
+
+export async function listShifts(): Promise<Shift[]> {
+  const rows = await getAll<Shift>(STORES.shifts);
+  return rows.sort((a, b) => b.opened_at - a.opened_at);
+}
+
+export async function getOpenShift(): Promise<Shift | null> {
+  const rows = await listShifts();
+  return rows.find((s) => s.status === "open" && s.closed_at === null) ?? null;
+}
+
+export async function openShift(openingCash: number): Promise<Shift> {
+  const existing = await getOpenShift();
+  if (existing) throw new Error("Sudah ada shift yang belum ditutup");
+  const shift: Shift = {
+    id: newId(),
+    opened_at: Date.now(),
+    closed_at: null,
+    opening_cash: openingCash,
+    closing_cash_system: null,
+    closing_cash_actual: null,
+    selisih: null,
+    status: "open",
+  };
+  await put(STORES.shifts, shift);
+  return shift;
+}
+
+export async function closeShift(shiftId: string, closingCashActual: number): Promise<Shift> {
+  const db = await openDb();
+  const tx = db.transaction([STORES.shifts, STORES.transactions], "readwrite");
+  const shift = await reqToPromise(
+    tx.objectStore(STORES.shifts).get(shiftId) as IDBRequest<Shift | undefined>,
+  );
+  if (!shift) throw new Error("Shift tidak ditemukan");
+  if (shift.status === "closed") throw new Error("Shift sudah ditutup");
+
+  const allTx = await reqToPromise(
+    tx.objectStore(STORES.transactions).getAll() as IDBRequest<Transaction[]>,
+  );
+  const cashSales = allTx
+    .filter(
+      (t) => t.shift_id === shiftId && t.payment_method === "cash" && t.status === "completed",
+    )
+    .reduce((s, t) => s + t.total_omset, 0);
+
+  const closing_cash_system = shift.opening_cash + cashSales;
+  const updated: Shift = {
+    ...shift,
+    closed_at: Date.now(),
+    closing_cash_system,
+    closing_cash_actual: closingCashActual,
+    selisih: closingCashActual - closing_cash_system,
+    status: "closed",
+  };
+  tx.objectStore(STORES.shifts).put(updated);
+  await txDone(tx);
+  return updated;
+}
+
+/* ---------------- Void transaksi ---------------- */
+
+export async function voidTransaction(transactionId: string, reason: string): Promise<void> {
+  const db = await openDb();
+  const tx = db.transaction([STORES.transactions], "readwrite");
+  const t = await reqToPromise(
+    tx.objectStore(STORES.transactions).get(transactionId) as IDBRequest<Transaction | undefined>,
+  );
+  if (!t) throw new Error("Transaksi tidak ditemukan");
+  if (t.status === "voided") throw new Error("Transaksi sudah dibatalkan");
+  tx.objectStore(STORES.transactions).put({ ...t, status: "voided", void_reason: reason });
+  await txDone(tx);
+}
+
 /* ---------------- Seed ---------------- */
+
+const DEFAULT_SETTINGS: StoreSettings = {
+  id: "default",
+  store_name: "Toko Saya",
+  business_type: "Warung",
+  logo_path: null,
+  pin_hash: null,
+  pin_salt: null,
+  seeded: false,
+};
 
 let seedPromise: Promise<void> | null = null;
 
@@ -274,11 +359,21 @@ function ensureSeed() {
 
 async function runSeed() {
   const db = await openDb();
-  const tx = db.transaction([STORES.categories, STORES.products], "readwrite");
+  const tx = db.transaction([STORES.categories, STORES.products, STORES.settings], "readwrite");
+  const settingsStore = tx.objectStore(STORES.settings);
+  const existing = await reqToPromise(
+    settingsStore.get("default") as IDBRequest<StoreSettings | undefined>,
+  );
+  // Sudah pernah di-seed atau user sengaja menghapus data → jangan seed lagi.
+  if (existing?.seeded) {
+    tx.abort();
+    return;
+  }
   const catStore = tx.objectStore(STORES.categories);
   const count = await reqToPromise(catStore.count());
   if (count > 0) {
-    tx.abort();
+    settingsStore.put({ ...(existing ?? DEFAULT_SETTINGS), seeded: true });
+    await txDone(tx);
     return;
   }
 
@@ -352,6 +447,7 @@ async function runSeed() {
 
   for (const c of cats) catStore.put(c);
   for (const p of products) tx.objectStore(STORES.products).put(p);
+  settingsStore.put({ ...(existing ?? DEFAULT_SETTINGS), seeded: true });
   await txDone(tx);
 }
 
@@ -393,17 +489,21 @@ export type BackupFile = {
   products: Product[];
   transactions: Transaction[];
   transaction_items: TransactionItem[];
+  /** opsional: backup lama (v1 sebelum shift) tidak memuat field ini */
+  shifts?: Shift[];
   settings: StoreSettings | null;
 };
 
 export async function exportAllData(): Promise<BackupFile> {
-  const [categories, products, transactions, transaction_items, settings] = await Promise.all([
-    getAll<Category>(STORES.categories),
-    getAll<Product>(STORES.products),
-    getAll<Transaction>(STORES.transactions),
-    getAll<TransactionItem>(STORES.transactionItems),
-    getSettings(),
-  ]);
+  const [categories, products, transactions, transaction_items, shifts, settings] =
+    await Promise.all([
+      getAll<Category>(STORES.categories),
+      getAll<Product>(STORES.products),
+      getAll<Transaction>(STORES.transactions),
+      getAll<TransactionItem>(STORES.transactionItems),
+      getAll<Shift>(STORES.shifts),
+      getSettings(),
+    ]);
   return {
     version: 1,
     exported_at: Date.now(),
@@ -411,6 +511,7 @@ export async function exportAllData(): Promise<BackupFile> {
     products,
     transactions,
     transaction_items,
+    shifts,
     settings,
   };
 }
@@ -423,7 +524,8 @@ export function isValidBackup(value: unknown): value is BackupFile {
     Array.isArray(v["categories"]) &&
     Array.isArray(v["products"]) &&
     Array.isArray(v["transactions"]) &&
-    Array.isArray(v["transaction_items"])
+    Array.isArray(v["transaction_items"]) &&
+    (v["shifts"] === undefined || Array.isArray(v["shifts"]))
   );
 }
 
@@ -432,31 +534,36 @@ const ALL_STORES = [
   STORES.products,
   STORES.transactions,
   STORES.transactionItems,
-  STORES.settings,
+  STORES.shifts,
 ];
 
 export async function importAllData(backup: BackupFile): Promise<void> {
   const db = await openDb();
-  const tx = db.transaction(ALL_STORES, "readwrite");
+  const tx = db.transaction([...ALL_STORES, STORES.settings], "readwrite");
   for (const store of ALL_STORES) tx.objectStore(store).clear();
 
   for (const c of backup.categories) tx.objectStore(STORES.categories).put(c);
   for (const p of backup.products) tx.objectStore(STORES.products).put(p);
   for (const t of backup.transactions) tx.objectStore(STORES.transactions).put(t);
   for (const i of backup.transaction_items) tx.objectStore(STORES.transactionItems).put(i);
+  for (const s of backup.shifts ?? []) tx.objectStore(STORES.shifts).put(s);
   if (backup.settings) tx.objectStore(STORES.settings).put({ ...backup.settings, id: "default" });
 
   await txDone(tx);
   seedPromise = Promise.resolve();
 }
 
-/** Hapus semua data, pengaturan toko (nama/logo/PIN) tetap dipertahankan. */
+/** Hapus semua data; pengaturan toko (nama/logo/PIN) dipertahankan, seed demo tidak dijalankan lagi. */
 export async function clearAllData(): Promise<void> {
   const db = await openDb();
-  const tx = db.transaction(ALL_STORES, "readwrite");
-  for (const store of ALL_STORES) {
-    if (store !== STORES.settings) tx.objectStore(store).clear();
-  }
+  const tx = db.transaction([...ALL_STORES, STORES.settings], "readwrite");
+  for (const store of ALL_STORES) tx.objectStore(store).clear();
+
+  const existing = await reqToPromise(
+    tx.objectStore(STORES.settings).get("default") as IDBRequest<StoreSettings | undefined>,
+  );
+  tx.objectStore(STORES.settings).put({ ...(existing ?? DEFAULT_SETTINGS), seeded: true });
+
   await txDone(tx);
   seedPromise = null;
 }

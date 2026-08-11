@@ -13,6 +13,7 @@ import {
 } from "recharts";
 
 import { AppShell } from "@/components/pos/AppShell";
+import { Input } from "@/components/ui/input";
 import { listAllTransactionItems, listTransactions } from "@/lib/db/pos-db";
 import type { Transaction, TransactionItem } from "@/lib/db/types";
 import { rupiah } from "@/lib/format";
@@ -32,13 +33,14 @@ export const Route = createFileRoute("/laporan")({
   component: LaporanPage,
 });
 
-type Range = "today" | "7d" | "30d" | "all";
+type Range = "today" | "7d" | "30d" | "all" | "custom";
 
 const DAY = 24 * 60 * 60 * 1000;
 const PRIMARY = "var(--color-primary)";
 const CHART_2 = "var(--color-chart-2)";
 const MUTED = "var(--color-muted-foreground)";
 const BORDER = "var(--color-border)";
+const WEEKDAYS = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
 
 function startOfToday() {
   const d = new Date();
@@ -46,11 +48,28 @@ function startOfToday() {
   return d.getTime();
 }
 
-function rangeFrom(range: Range): number {
-  if (range === "today") return startOfToday();
-  if (range === "7d") return Date.now() - 7 * DAY;
-  if (range === "30d") return Date.now() - 30 * DAY;
-  return 0;
+function fmtDate(ts: number) {
+  const d = new Date(ts);
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+function rangeBounds(
+  range: Range,
+  customFrom: number | null,
+  customTo: number | null,
+): { from: number; to: number } {
+  const now = Date.now();
+  if (range === "today") return { from: startOfToday(), to: now };
+  if (range === "7d") return { from: now - 7 * DAY, to: now };
+  if (range === "30d") return { from: now - 30 * DAY, to: now };
+  if (range === "custom") {
+    const from = customFrom ?? 0;
+    const to = (customTo ?? now) + DAY;
+    return { from, to };
+  }
+  return { from: 0, to: now };
 }
 
 function compactRupiah(value: number) {
@@ -93,6 +112,8 @@ type ProductRank = {
 
 function LaporanPage() {
   const [range, setRange] = useState<Range>("7d");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
 
   const { data: transactions = [] } = useQuery({
     queryKey: ["transactions"],
@@ -104,9 +125,11 @@ function LaporanPage() {
   });
 
   const report = useMemo(() => {
-    const from = rangeFrom(range);
+    const customFromTs = customFrom ? new Date(`${customFrom}T00:00:00`).getTime() : null;
+    const customToTs = customTo ? new Date(`${customTo}T00:00:00`).getTime() : null;
+    const { from, to } = rangeBounds(range, customFromTs, customToTs);
     const active: Transaction[] = transactions.filter(
-      (t) => t.status === "completed" && t.timestamp >= from,
+      (t) => t.status === "completed" && t.timestamp >= from && t.timestamp < to,
     );
 
     const itemsByTx = new Map<string, TransactionItem[]>();
@@ -116,12 +139,25 @@ function LaporanPage() {
       else itemsByTx.set(item.transaction_id, [item]);
     }
 
-    const omset = active.reduce((s, t) => s + t.total_omset, 0);
-    const laba = active.reduce((s, t) => s + t.total_laba, 0);
-    const qtyTotal = active.reduce((s, t) => {
-      const items = itemsByTx.get(t.id);
-      return s + (items?.reduce((a, it) => a + it.qty, 0) ?? 0);
-    }, 0);
+    // Omset & laba dihitung dari item (bukan field transaksi) agar konsisten dan
+    // laba tidak mengasumsikan HPP=0 untuk produk tanpa HPP (PRD §4.5).
+    let omset = 0;
+    let laba = 0;
+    let totalHpp = 0;
+    let qtyTotal = 0;
+    for (const t of active) {
+      omset += t.total_omset;
+      for (const it of itemsByTx.get(t.id) ?? []) {
+        qtyTotal += it.qty;
+        if (it.hpp_at_sale !== null) {
+          laba += (it.price_at_sale - it.hpp_at_sale) * it.qty;
+          totalHpp += it.hpp_at_sale * it.qty;
+        }
+      }
+    }
+    const someMissing = active.some((t) => t.has_missing_hpp);
+    const distinctDays = new Set(active.map((t) => new Date(t.timestamp).toDateString())).size;
+    const spanDays = Math.max(1, distinctDays);
 
     // Leaderboard produk (per product_id, pakai snapshot nama)
     const rankMap = new Map<string, ProductRank>();
@@ -138,7 +174,7 @@ function LaporanPage() {
         const missing = item.hpp_at_sale === null;
         cur.qty += item.qty;
         cur.omset += item.price_at_sale * item.qty;
-        cur.laba += (item.price_at_sale - (item.hpp_at_sale ?? 0)) * item.qty;
+        if (!missing) cur.laba += (item.price_at_sale - (item.hpp_at_sale ?? 0)) * item.qty;
         cur.has_missing_hpp = cur.has_missing_hpp || missing;
         rankMap.set(item.product_id, cur);
       }
@@ -161,28 +197,38 @@ function LaporanPage() {
       bucket.transaksi += 1;
     }
 
-
-    // Hari sibuk (bucket per tanggal)
-    const dayMap = new Map<string, { label: string; omset: number; transaksi: number }>();
+    // Hari sibuk (agregasi Senin–Minggu)
+    const weekdays = WEEKDAYS.map((label) => ({ label, omset: 0, transaksi: 0 }));
     for (const t of active) {
-      const d = new Date(t.timestamp);
-      const key = d.toDateString();
-      const label = d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
-      const cur = dayMap.get(key) ?? { label, omset: 0, transaksi: 0 };
-      cur.omset += t.total_omset;
-      cur.transaksi += 1;
-      dayMap.set(key, cur);
+      const idx = (new Date(t.timestamp).getDay() + 6) % 7;
+      const day = weekdays[idx];
+      if (!day) continue;
+      day.omset += t.total_omset;
+      day.transaksi += 1;
     }
-    const days = Array.from(dayMap.entries())
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .slice(-60)
-      .map(([, v]) => v);
 
-    return { count: active.length, omset, laba, qtyTotal, hours, days, leaderboard };
-  }, [transactions, allItems, range]);
+    return {
+      count: active.length,
+      omset,
+      laba,
+      totalHpp,
+      qtyTotal,
+      someMissing,
+      spanDays,
+      hours,
+      weekdays,
+      leaderboard,
+    };
+  }, [transactions, allItems, range, customFrom, customTo]);
 
-  const showDaysChart = range !== "today";
   const wide = Math.max(320, report.hours.length * 22);
+
+  const pickCustom = () => {
+    if (range === "custom") return;
+    setRange("custom");
+    if (!customFrom) setCustomFrom(fmtDate(Date.now() - 30 * DAY));
+    if (!customTo) setCustomTo(fmtDate(Date.now()));
+  };
 
   return (
     <AppShell title="Laporan">
@@ -193,12 +239,13 @@ function LaporanPage() {
             ["7d", "7 hari"],
             ["30d", "30 hari"],
             ["all", "Semua"],
+            ["custom", "Kustom"],
           ] as const
         ).map(([value, label]) => (
           <button
             key={value}
             type="button"
-            onClick={() => setRange(value)}
+            onClick={() => (value === "custom" ? pickCustom() : setRange(value))}
             className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition ${
               range === value
                 ? "bg-primary text-primary-foreground"
@@ -210,6 +257,29 @@ function LaporanPage() {
         ))}
       </div>
 
+      {range === "custom" && (
+        <div className="-mx-4 mb-4 grid grid-cols-2 gap-2 px-4">
+          <div>
+            <p className="mb-1 text-xs text-muted-foreground">Dari</p>
+            <Input
+              type="date"
+              className="h-11"
+              value={customFrom}
+              onChange={(e) => setCustomFrom(e.target.value)}
+            />
+          </div>
+          <div>
+            <p className="mb-1 text-xs text-muted-foreground">Sampai</p>
+            <Input
+              type="date"
+              className="h-11"
+              value={customTo}
+              onChange={(e) => setCustomTo(e.target.value)}
+            />
+          </div>
+        </div>
+      )}
+
       {report.count === 0 ? (
         <div className="rounded-xl border border-dashed border-border p-6 text-center">
           <p className="text-sm font-semibold text-foreground">Belum ada transaksi</p>
@@ -219,6 +289,13 @@ function LaporanPage() {
         </div>
       ) : (
         <div className="space-y-4">
+          {report.someMissing && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs font-medium text-amber-900">
+              Sebagian produk belum diisi HPP — laba, margin, dan total HPP dihitung dari produk
+              ber-HPP saja.
+            </div>
+          )}
+
           {/* Ringkasan */}
           <div className="grid grid-cols-2 gap-3">
             <StatCard
@@ -228,14 +305,24 @@ function LaporanPage() {
               highlight
             />
             <StatCard
-              label="Laba"
-              value={rupiah(report.laba)}
-              sub={report.qtyTotal > 0 ? `${report.qtyTotal} item terjual` : "—"}
+              label="Transaksi"
+              value={String(report.count)}
+              sub={report.qtyTotal > 0 ? `${report.qtyTotal} item` : "—"}
             />
             <StatCard
-              label="Rata-rata / trx"
-              value={rupiah(report.count > 0 ? Math.round(report.omset / report.count) : 0)}
-              sub="per transaksi"
+              label="Rata-rata / hari"
+              value={rupiah(report.spanDays > 0 ? Math.round(report.omset / report.spanDays) : 0)}
+              sub={`${report.spanDays} hari aktif`}
+            />
+            <StatCard
+              label="Laba"
+              value={rupiah(report.laba)}
+              sub={report.someMissing ? "HPP belum lengkap" : `${report.qtyTotal} item terjual`}
+            />
+            <StatCard
+              label="Total HPP"
+              value={rupiah(report.totalHpp)}
+              sub={report.someMissing ? "sebagian kosong" : "harga pokok terjual"}
             />
             <StatCard
               label="Margin"
@@ -291,40 +378,49 @@ function LaporanPage() {
           </section>
 
           {/* Hari sibuk */}
-          {showDaysChart && report.days.length > 0 && (
-            <section className="rounded-xl border border-border bg-card p-4">
-              <h2 className="text-sm font-bold text-foreground">Hari sibuk</h2>
-              <p className="mt-0.5 text-xs text-muted-foreground">Omset per tanggal</p>
-              <div className="no-scrollbar mt-3 overflow-x-auto">
-                <div style={{ width: Math.max(320, report.days.length * 46) }}>
-                  <ResponsiveContainer width="100%" height={180}>
-                    <BarChart data={report.days} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
-                      <CartesianGrid stroke={BORDER} vertical={false} />
-                      <XAxis
-                        dataKey="label"
-                        tick={{ fill: MUTED, fontSize: 10 }}
-                        tickLine={false}
-                        axisLine={{ stroke: BORDER }}
-                        interval={0}
-                      />
-                      <YAxis
-                        tick={{ fill: MUTED, fontSize: 10 }}
-                        tickLine={false}
-                        axisLine={false}
-                        width={38}
-                        tickFormatter={(v: number) => compactRupiah(v)}
-                      />
-                      <Tooltip
-                        content={<ChartTooltip />}
-                        cursor={{ fill: "var(--color-accent)", opacity: 0.4 }}
-                      />
-                      <Bar dataKey="omset" radius={[4, 4, 0, 0]} fill={CHART_2} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </section>
-          )}
+          <section className="rounded-xl border border-border bg-card p-4">
+            <h2 className="text-sm font-bold text-foreground">Hari sibuk</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">Omset per hari (Senin–Minggu)</p>
+            <div className="mt-3">
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={report.weekdays} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
+                  <CartesianGrid stroke={BORDER} vertical={false} />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fill: MUTED, fontSize: 11 }}
+                    tickLine={false}
+                    axisLine={{ stroke: BORDER }}
+                    interval={0}
+                  />
+                  <YAxis
+                    tick={{ fill: MUTED, fontSize: 10 }}
+                    tickLine={false}
+                    axisLine={false}
+                    width={38}
+                    tickFormatter={(v: number) => compactRupiah(v)}
+                  />
+                  <Tooltip
+                    content={<ChartTooltip />}
+                    cursor={{ fill: "var(--color-accent)", opacity: 0.4 }}
+                  />
+                  <Bar dataKey="omset" radius={[4, 4, 0, 0]}>
+                    {report.weekdays.map((d) => (
+                      <Cell key={d.label} fill={d.omset > 0 ? CHART_2 : "transparent"} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Puncak:{" "}
+              <span className="font-semibold text-foreground">
+                {report.weekdays.reduce(
+                  (best, d) => (d.omset > (best?.omset ?? -1) ? d : best),
+                  null as { label: string; omset: number } | null,
+                )?.label ?? "-"}
+              </span>
+            </p>
+          </section>
 
           {/* Produk terlaris */}
           <section className="rounded-xl border border-border bg-card p-4">

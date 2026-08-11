@@ -48,6 +48,8 @@ export type StoreSettings = {
   logo_path: string | null;
   pin_hash: string | null;
   pin_salt: string | null;
+  /** true bila seed demo sudah dijalankan atau user sengaja menghapus data */
+  seeded?: boolean;
 };
 
 export type Shift = {
