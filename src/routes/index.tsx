@@ -56,9 +56,14 @@ function KasirPage() {
   const [cart, setCart] = useState<CartLine[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [numpadFor, setNumpadFor] = useState<CartLine | null>(null);
+  const [receipt, setReceipt] = useState<{
+    transaction: Transaction;
+    items: TransactionItem[];
+  } | null>(null);
 
   const { data: products = [] } = useQuery({ queryKey: ["products"], queryFn: listProducts });
   const { data: categories = [] } = useQuery({ queryKey: ["categories"], queryFn: listCategories });
+  const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: getSettings });
 
   const filtered = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
