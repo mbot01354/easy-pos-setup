@@ -63,6 +63,7 @@ function RiwayatPage() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [pinError, setPinError] = useState<string | null>(null);
+  const [receiptOpen, setReceiptOpen] = useState(false);
 
   const { data: transactions = [] } = useQuery({
     queryKey: ["transactions"],
