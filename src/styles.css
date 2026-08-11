@@ -165,3 +165,29 @@
     display: none;
   }
 }
+
+/* Cetak: hanya area struk yang keluar di kertas */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  #receipt-area,
+  #receipt-area * {
+    visibility: visible;
+  }
+
+  #receipt-area {
+    position: fixed;
+    inset: 0 auto auto 0;
+    width: 100%;
+    max-width: none;
+    padding: 0;
+    background: #fff;
+    color: #000;
+  }
+
+  .print-hide {
+    display: none !important;
+  }
+}
