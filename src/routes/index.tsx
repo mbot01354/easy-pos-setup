@@ -6,11 +6,18 @@ import { toast } from "sonner";
 
 import { AppShell } from "@/components/pos/AppShell";
 import { NumpadDialog } from "@/components/pos/NumpadDialog";
+import { ReceiptDialog } from "@/components/pos/ReceiptDialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { checkout, listCategories, listProducts } from "@/lib/db/pos-db";
-import type { CartLine, PaymentMethod, Product } from "@/lib/db/types";
+import { checkout, getSettings, listCategories, listProducts } from "@/lib/db/pos-db";
+import type {
+  CartLine,
+  PaymentMethod,
+  Product,
+  Transaction,
+  TransactionItem,
+} from "@/lib/db/types";
 import { rupiah } from "@/lib/format";
 
 export const Route = createFileRoute("/")({
