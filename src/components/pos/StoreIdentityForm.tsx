@@ -16,9 +16,11 @@ export function StoreIdentityForm({ settings }: { settings: StoreSettings | unde
   const [type, setType] = useState("");
   const [logo, setLogo] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const initialized = useRef(false);
 
   useEffect(() => {
-    if (!settings) return;
+    if (!settings || initialized.current) return;
+    initialized.current = true;
     setName(settings.store_name);
     setType(settings.business_type);
     setLogo(settings.logo_path);
@@ -34,7 +36,6 @@ export function StoreIdentityForm({ settings }: { settings: StoreSettings | unde
   };
 
   const submit = async () => {
-    if (!settings) return;
     if (!name.trim()) {
       toast.error("Nama toko wajib diisi");
       return;
@@ -42,13 +43,17 @@ export function StoreIdentityForm({ settings }: { settings: StoreSettings | unde
     setSaving(true);
     try {
       await saveSettings({
-        ...settings,
+        id: "default",
+        pin_hash: settings?.pin_hash ?? null,
+        pin_salt: settings?.pin_salt ?? null,
         store_name: name.trim(),
         business_type: type.trim(),
         logo_path: logo,
       });
       await queryClient.invalidateQueries({ queryKey: ["settings"] });
       toast.success("Identitas toko tersimpan");
+    } catch {
+      toast.error("Gagal menyimpan identitas");
     } finally {
       setSaving(false);
     }
