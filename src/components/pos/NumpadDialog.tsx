@@ -10,6 +10,7 @@ export function NumpadDialog({
   onClose,
   onSubmit,
   max,
+  presets,
 }: {
   open: boolean;
   title: string;
@@ -17,6 +18,7 @@ export function NumpadDialog({
   onClose: () => void;
   onSubmit: (value: number) => void;
   max?: number | null;
+  presets?: number[];
 }) {
   const [raw, setRaw] = useState(String(initialValue));
 
@@ -42,7 +44,25 @@ export function NumpadDialog({
         <div className="rounded-lg bg-muted px-4 py-3 text-right text-3xl font-bold tabular-nums">
           {raw === "" ? "0" : raw}
         </div>
-        {tooMuch && <p className="text-sm font-medium text-destructive">Melebihi stok ({max})</p>}
+        {tooMuch && <p className="text-sm font-medium text-destructive">Melebihi batas ({max})</p>}
+        {presets && presets.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {presets.map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setRaw(String(p))}
+                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                  value === p
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-card text-foreground"
+                }`}
+              >
+                {p}%
+              </button>
+            ))}
+          </div>
+        )}
         <div className="grid grid-cols-3 gap-2">
           {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((k) => (
             <Button key={k} variant="secondary" className="h-14 text-xl" onClick={() => press(k)}>

@@ -82,6 +82,9 @@ function KasirPage() {
   const [openCash, setOpenCash] = useState(false);
   const [closeCash, setCloseCash] = useState(false);
   const [shiftResult, setShiftResult] = useState<Shift | null>(null);
+  const [discountFor, setDiscountFor] = useState<CartLine | null>(null);
+  const [txPercent, setTxPercent] = useState(0);
+  const [txDiscOpen, setTxDiscOpen] = useState(false);
 
   const { data: products = [] } = useQuery({ queryKey: ["products"], queryFn: listProducts });
   const { data: categories = [] } = useQuery({ queryKey: ["categories"], queryFn: listCategories });
@@ -101,19 +104,34 @@ function KasirPage() {
   }, [products, debouncedSearch, activeCat]);
 
   const totalQty = cart.reduce((s, l) => s + l.qty, 0);
-  const totalOmset = cart.reduce((s, l) => s + l.qty * l.product.sell_price, 0);
+  const subtotal = cart.reduce((s, l) => s + l.qty * l.product.sell_price, 0);
+  const itemDiscTotal = cart.reduce(
+    (s, l) => s + Math.round((l.qty * l.product.sell_price * l.discount_percent) / 100),
+    0,
+  );
+  const afterItemDisc = subtotal - itemDiscTotal;
+  const txDiscTotal = Math.round((afterItemDisc * txPercent) / 100);
+  const totalOmset = afterItemDisc - txDiscTotal;
 
   const addToCart = (product: Product) => {
     if (product.stock === 0) return;
     setCart((prev) => {
       const found = prev.find((l) => l.product.id === product.id);
-      if (!found) return [...prev, { product, qty: 1 }];
+      if (!found) return [...prev, { product, qty: 1, discount_percent: 0 }];
       if (product.stock !== null && found.qty + 1 > product.stock) {
         toast.error(`Stok ${product.name} tinggal ${product.stock}`);
         return prev;
       }
       return prev.map((l) => (l.product.id === product.id ? { ...l, qty: l.qty + 1 } : l));
     });
+  };
+
+  const setStoreDiscount = (productId: string, percent: number) => {
+    setCart((prev) =>
+      prev.map((l) =>
+        l.product.id === productId ? { ...l, discount_percent: Math.min(100, Math.max(0, percent)) } : l,
+      ),
+    );
   };
 
   const setQty = (productId: string, qty: number) => {
@@ -130,8 +148,9 @@ function KasirPage() {
       return;
     }
     try {
-      const result = await checkout(cart, method, activeShift.id);
+      const result = await checkout(cart, method, activeShift.id, txPercent);
       setCart([]);
+      setTxPercent(0);
       setCartOpen(false);
       setReceipt({ transaction: result.transaction, items: result.items });
       await queryClient.invalidateQueries({ queryKey: ["products"] });

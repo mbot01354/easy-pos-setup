@@ -174,6 +174,7 @@ export async function checkout(
   lines: CartLine[],
   paymentMethod: PaymentMethod,
   shiftId: string,
+  txDiscountPercent = 0,
 ): Promise<CheckoutResult> {
   if (lines.length === 0) throw new Error("Keranjang kosong");
   if (!shiftId) throw new Error("Buka shift dulu sebelum bertransaksi");
@@ -190,6 +191,7 @@ export async function checkout(
   let totalHpp = 0;
   let totalLaba = 0;
   let hasMissingHpp = false;
+  let discountTotal = 0;
 
   for (const line of lines) {
     const fresh = await reqToPromise(
@@ -201,14 +203,21 @@ export async function checkout(
       throw new Error(`Stok ${fresh.name} tidak cukup (sisa ${fresh.stock})`);
     }
 
-    totalOmset += fresh.sell_price * line.qty;
+    const discountPercent = clampPercent(line.discount_percent);
+    const gross = fresh.sell_price * line.qty;
+    const itemDisc = Math.round((gross * discountPercent) / 100);
+    const net = gross - itemDisc;
+
+    totalOmset += net;
+    discountTotal += itemDisc;
     // Laba hanya dihitung untuk produk yang HPP-nya terisi; tanpa HPP tidak usah
     // diasumsikan 0 (PRD §4.5) — ditandai via has_missing_hpp.
     if (fresh.cost_price === null) {
       hasMissingHpp = true;
     } else {
-      totalHpp += fresh.cost_price * line.qty;
-      totalLaba += (fresh.sell_price - fresh.cost_price) * line.qty;
+      const hpp = fresh.cost_price * line.qty;
+      totalHpp += hpp;
+      totalLaba += net - hpp;
     }
 
     items.push({
@@ -219,6 +228,7 @@ export async function checkout(
       qty: line.qty,
       price_at_sale: fresh.sell_price,
       hpp_at_sale: fresh.cost_price,
+      ...(discountPercent > 0 ? { discount_percent: discountPercent } : {}),
     });
 
     if (fresh.stock !== null) {
@@ -226,15 +236,22 @@ export async function checkout(
     }
   }
 
+  // Diskon transaksi diterapkan di atas subtotal (sudah net dari diskon per item)
+  const txPercent = clampPercent(txDiscountPercent);
+  const txDisc = Math.round((totalOmset * txPercent) / 100);
+  const netTotal = totalOmset - txDisc;
+  discountTotal += txDisc;
+
   const transaction: Transaction = {
     id: transactionId,
     timestamp: Date.now(),
     cashier_id: null,
     shift_id: shiftId,
-    total_omset: totalOmset,
+    total_omset: netTotal,
     total_hpp: totalHpp,
-    total_laba: totalLaba,
+    total_laba: totalLaba - txDisc,
     has_missing_hpp: hasMissingHpp,
+    discount_total: discountTotal,
     payment_method: paymentMethod,
     status: "completed",
     void_reason: null,
@@ -245,6 +262,10 @@ export async function checkout(
 
   await txDone(tx);
   return { transaction, items };
+}
+
+function clampPercent(value: number) {
+  return Math.min(100, Math.max(0, Math.round(value)));
 }
 
 export async function listTransactions(): Promise<Transaction[]> {
@@ -348,6 +369,7 @@ const DEFAULT_SETTINGS: StoreSettings = {
   pin_hash: null,
   pin_salt: null,
   seeded: false,
+  low_stock_threshold: 5,
 };
 
 let seedPromise: Promise<void> | null = null;
