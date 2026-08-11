@@ -233,6 +233,9 @@ function RiwayatPage() {
                   </span>
                 </div>
               </div>
+              <Button className="h-11 w-full" onClick={() => setReceiptOpen(true)}>
+                <Printer className="mr-2 h-4 w-4" /> Lihat &amp; cetak struk
+              </Button>
               <Button
                 variant="outline"
                 className="h-11 w-full text-destructive"
@@ -244,6 +247,14 @@ function RiwayatPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <ReceiptDialog
+        open={receiptOpen && detail !== null}
+        onClose={() => setReceiptOpen(false)}
+        transaction={detail}
+        items={detailItems}
+        settings={settings}
+      />
 
       <PinDialog
         open={pendingDelete !== null}
