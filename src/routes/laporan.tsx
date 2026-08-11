@@ -155,10 +155,12 @@ function LaporanPage() {
       transaksi: 0,
     }));
     for (const t of active) {
-      const h = new Date(t.timestamp).getHours();
-      hours[h].omset += t.total_omset;
-      hours[h].transaksi += 1;
+      const bucket = hours[new Date(t.timestamp).getHours()];
+      if (!bucket) continue;
+      bucket.omset += t.total_omset;
+      bucket.transaksi += 1;
     }
+
 
     // Hari sibuk (bucket per tanggal)
     const dayMap = new Map<string, { label: string; omset: number; transaksi: number }>();
