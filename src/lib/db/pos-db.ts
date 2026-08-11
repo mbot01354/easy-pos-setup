@@ -383,3 +383,80 @@ export async function deleteTransaction(transactionId: string): Promise<void> {
   tx.objectStore(STORES.transactions).delete(transactionId);
   await txDone(tx);
 }
+
+/* ---------------- Backup / Restore ---------------- */
+
+export type BackupFile = {
+  version: 1;
+  exported_at: number;
+  categories: Category[];
+  products: Product[];
+  transactions: Transaction[];
+  transaction_items: TransactionItem[];
+  settings: StoreSettings | null;
+};
+
+export async function exportAllData(): Promise<BackupFile> {
+  const [categories, products, transactions, transaction_items, settings] = await Promise.all([
+    getAll<Category>(STORES.categories),
+    getAll<Product>(STORES.products),
+    getAll<Transaction>(STORES.transactions),
+    getAll<TransactionItem>(STORES.transactionItems),
+    getSettings(),
+  ]);
+  return {
+    version: 1,
+    exported_at: Date.now(),
+    categories,
+    products,
+    transactions,
+    transaction_items,
+    settings,
+  };
+}
+
+export function isValidBackup(value: unknown): value is BackupFile {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    v["version"] === 1 &&
+    Array.isArray(v["categories"]) &&
+    Array.isArray(v["products"]) &&
+    Array.isArray(v["transactions"]) &&
+    Array.isArray(v["transaction_items"])
+  );
+}
+
+const ALL_STORES = [
+  STORES.categories,
+  STORES.products,
+  STORES.transactions,
+  STORES.transactionItems,
+  STORES.settings,
+];
+
+export async function importAllData(backup: BackupFile): Promise<void> {
+  const db = await openDb();
+  const tx = db.transaction(ALL_STORES, "readwrite");
+  for (const store of ALL_STORES) tx.objectStore(store).clear();
+
+  for (const c of backup.categories) tx.objectStore(STORES.categories).put(c);
+  for (const p of backup.products) tx.objectStore(STORES.products).put(p);
+  for (const t of backup.transactions) tx.objectStore(STORES.transactions).put(t);
+  for (const i of backup.transaction_items) tx.objectStore(STORES.transactionItems).put(i);
+  if (backup.settings) tx.objectStore(STORES.settings).put({ ...backup.settings, id: "default" });
+
+  await txDone(tx);
+  seedPromise = Promise.resolve();
+}
+
+/** Hapus semua data, pengaturan toko (nama/logo/PIN) tetap dipertahankan. */
+export async function clearAllData(): Promise<void> {
+  const db = await openDb();
+  const tx = db.transaction(ALL_STORES, "readwrite");
+  for (const store of ALL_STORES) {
+    if (store !== STORES.settings) tx.objectStore(store).clear();
+  }
+  await txDone(tx);
+  seedPromise = null;
+}
