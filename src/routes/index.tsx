@@ -288,6 +288,14 @@ function KasirPage() {
           setNumpadFor(null);
         }}
       />
+
+      <ReceiptDialog
+        open={receipt !== null}
+        onClose={() => setReceipt(null)}
+        transaction={receipt?.transaction ?? null}
+        items={receipt?.items ?? []}
+        settings={settings}
+      />
     </AppShell>
   );
 }
