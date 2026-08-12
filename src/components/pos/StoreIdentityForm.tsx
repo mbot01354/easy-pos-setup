@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { saveSettings } from "@/lib/db/pos-db";
 import type { StoreSettings } from "@/lib/db/types";
 import { fileToCompressedDataUrl } from "@/lib/image";
+import { DEFAULT_LOW_STOCK_THRESHOLD } from "@/lib/stock";
 
 export function StoreIdentityForm({ settings }: { settings: StoreSettings | undefined }) {
   const queryClient = useQueryClient();
@@ -122,6 +123,20 @@ export function StoreIdentityForm({ settings }: { settings: StoreSettings | unde
             placeholder="Warung Makan"
             className="mt-1 h-11"
           />
+        </div>
+        <div>
+          <Label htmlFor="low-stock">Ambang stok menipis</Label>
+          <Input
+            id="low-stock"
+            inputMode="numeric"
+            value={threshold}
+            onChange={(e) => setThreshold(e.target.value.replace(/\D/g, ""))}
+            placeholder="5"
+            className="mt-1 h-11"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Produk dengan sisa stok sampai angka ini ditandai &quot;Stok menipis&quot;.
+          </p>
         </div>
       </div>
 
