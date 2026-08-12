@@ -15,6 +15,7 @@ export function StoreIdentityForm({ settings }: { settings: StoreSettings | unde
   const [name, setName] = useState("");
   const [type, setType] = useState("");
   const [logo, setLogo] = useState<string | null>(null);
+  const [threshold, setThreshold] = useState("5");
   const [saving, setSaving] = useState(false);
   const initialized = useRef(false);
 
@@ -24,6 +25,7 @@ export function StoreIdentityForm({ settings }: { settings: StoreSettings | unde
     setName(settings.store_name);
     setType(settings.business_type);
     setLogo(settings.logo_path);
+    setThreshold(String(settings.low_stock_threshold ?? DEFAULT_LOW_STOCK_THRESHOLD));
   }, [settings]);
 
   const pickLogo = async (file: File | undefined) => {
@@ -40,6 +42,11 @@ export function StoreIdentityForm({ settings }: { settings: StoreSettings | unde
       toast.error("Nama toko wajib diisi");
       return;
     }
+    const parsedThreshold = Number.parseInt(threshold, 10);
+    if (Number.isNaN(parsedThreshold) || parsedThreshold < 0) {
+      toast.error("Ambang stok menipis harus angka 0 atau lebih");
+      return;
+    }
     setSaving(true);
     try {
       await saveSettings({
@@ -49,6 +56,8 @@ export function StoreIdentityForm({ settings }: { settings: StoreSettings | unde
         store_name: name.trim(),
         business_type: type.trim(),
         logo_path: logo,
+        ...(settings?.seeded !== undefined ? { seeded: settings.seeded } : {}),
+        low_stock_threshold: parsedThreshold,
       });
       await queryClient.invalidateQueries({ queryKey: ["settings"] });
       toast.success("Identitas toko tersimpan");
