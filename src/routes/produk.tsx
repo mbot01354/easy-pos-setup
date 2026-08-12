@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/pos/AppShell";
@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import {
   deleteProduct,
+  getSettings,
   listCategories,
   listProducts,
   saveCategory,
@@ -31,6 +32,7 @@ import {
 } from "@/lib/db/pos-db";
 import type { Product } from "@/lib/db/types";
 import { parseRupiahInput, rupiah } from "@/lib/format";
+import { isLowStock, lowStockThreshold } from "@/lib/stock";
 
 export const Route = createFileRoute("/produk")({
   head: () => ({
@@ -76,9 +78,15 @@ function ProdukPage() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [newCat, setNewCat] = useState("");
   const [catOpen, setCatOpen] = useState(false);
+  const [onlyLow, setOnlyLow] = useState(false);
 
   const { data: products = [] } = useQuery({ queryKey: ["products"], queryFn: listProducts });
   const { data: categories = [] } = useQuery({ queryKey: ["categories"], queryFn: listCategories });
+  const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: getSettings });
+
+  const threshold = lowStockThreshold(settings);
+  const lowStockItems = products.filter((p) => isLowStock(p, threshold) || p.stock === 0);
+  const visibleProducts = onlyLow ? lowStockItems : products;
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["products"] });
