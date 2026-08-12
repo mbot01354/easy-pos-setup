@@ -131,7 +131,9 @@ function KasirPage() {
   const setStoreDiscount = (productId: string, percent: number) => {
     setCart((prev) =>
       prev.map((l) =>
-        l.product.id === productId ? { ...l, discount_percent: Math.min(100, Math.max(0, percent)) } : l,
+        l.product.id === productId
+          ? { ...l, discount_percent: Math.min(100, Math.max(0, percent)) }
+          : l,
       ),
     );
   };
@@ -393,7 +395,11 @@ function KasirPage() {
                       >
                         <Plus className="h-4 w-4" />
                       </Button>
-                      <Button size="icon" variant="ghost" onClick={() => setQty(line.product.id, 0)}>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => setQty(line.product.id, 0)}
+                      >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </div>
@@ -465,7 +471,6 @@ function KasirPage() {
               </Button>
             </div>
           </div>
-
         </SheetContent>
       </Sheet>
 

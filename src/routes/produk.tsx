@@ -365,4 +365,3 @@ function StockBadge({ product, threshold }: { product: Product; threshold: numbe
     );
   return <span className="text-[11px] font-medium text-foreground">Stok {stock}</span>;
 }
-
