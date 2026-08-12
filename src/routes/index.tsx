@@ -481,6 +481,32 @@ function KasirPage() {
         }}
       />
 
+      <NumpadDialog
+        open={discountFor !== null}
+        title={`Diskon % — ${discountFor?.product.name ?? ""}`}
+        initialValue={discountFor?.discount_percent ?? 0}
+        max={100}
+        presets={DISCOUNT_PRESETS}
+        onClose={() => setDiscountFor(null)}
+        onSubmit={(value) => {
+          if (discountFor) setStoreDiscount(discountFor.product.id, value);
+          setDiscountFor(null);
+        }}
+      />
+
+      <NumpadDialog
+        open={txDiscOpen}
+        title="Diskon transaksi (%)"
+        initialValue={txPercent}
+        max={100}
+        presets={DISCOUNT_PRESETS}
+        onClose={() => setTxDiscOpen(false)}
+        onSubmit={(value) => {
+          setTxPercent(Math.min(100, Math.max(0, Math.round(value))));
+          setTxDiscOpen(false);
+        }}
+      />
+
       <ReceiptDialog
         open={receipt !== null}
         onClose={() => setReceipt(null)}
