@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, Trash2, Plus, Minus, ShoppingCart } from "lucide-react";
+import { Search, Trash2, Plus, Minus, ShoppingCart, Percent } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/pos/AppShell";
@@ -295,6 +295,10 @@ function KasirPage() {
                 {habis ? (
                   <span className="mt-1 inline-flex w-fit rounded bg-destructive px-1.5 py-0.5 text-[10px] font-bold text-destructive-foreground">
                     Stok Habis
+                  </span>
+                ) : isLowStock(p, lowThreshold) ? (
+                  <span className="mt-1 inline-flex w-fit rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                    Stok menipis · {p.stock}
                   </span>
                 ) : (
                   <span className="mt-1 text-[11px] text-muted-foreground">
