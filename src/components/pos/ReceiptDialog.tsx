@@ -63,20 +63,44 @@ export function ReceiptDialog({ open, onClose, transaction, items, settings }: P
           <div className="my-2 border-t border-dashed border-foreground/40" />
 
           <div className="space-y-1">
-            {items.map((item) => (
-              <div key={item.id}>
-                <p className="font-bold">{item.product_name}</p>
-                <div className="flex justify-between">
-                  <span>
-                    {item.qty} x {rupiah(item.price_at_sale)}
-                  </span>
-                  <span className="tabular-nums">{rupiah(item.price_at_sale * item.qty)}</span>
+            {items.map((item) => {
+              const gross = item.price_at_sale * item.qty;
+              const disc = Math.round((gross * (item.discount_percent ?? 0)) / 100);
+              return (
+                <div key={item.id}>
+                  <p className="font-bold">{item.product_name}</p>
+                  <div className="flex justify-between">
+                    <span>
+                      {item.qty} x {rupiah(item.price_at_sale)}
+                    </span>
+                    <span className="tabular-nums">{rupiah(gross)}</span>
+                  </div>
+                  {disc > 0 && (
+                    <div className="flex justify-between">
+                      <span>Diskon {item.discount_percent}%</span>
+                      <span className="tabular-nums">-{rupiah(disc)}</span>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="my-2 border-t border-dashed border-foreground/40" />
+          {(transaction.discount_total ?? 0) > 0 && (
+            <>
+              <div className="flex justify-between">
+                <span>Subtotal</span>
+                <span className="tabular-nums">
+                  {rupiah(transaction.total_omset + (transaction.discount_total ?? 0))}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Total Diskon</span>
+                <span className="tabular-nums">-{rupiah(transaction.discount_total ?? 0)}</span>
+              </div>
+            </>
+          )}
           <div className="flex justify-between text-sm font-bold">
             <span>TOTAL</span>
             <span className="tabular-nums">{rupiah(transaction.total_omset)}</span>
