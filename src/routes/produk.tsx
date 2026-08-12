@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/pos/AppShell";
@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import {
   deleteProduct,
+  getSettings,
   listCategories,
   listProducts,
   saveCategory,
@@ -31,6 +32,7 @@ import {
 } from "@/lib/db/pos-db";
 import type { Product } from "@/lib/db/types";
 import { parseRupiahInput, rupiah } from "@/lib/format";
+import { isLowStock, lowStockThreshold } from "@/lib/stock";
 
 export const Route = createFileRoute("/produk")({
   head: () => ({
@@ -76,9 +78,15 @@ function ProdukPage() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [newCat, setNewCat] = useState("");
   const [catOpen, setCatOpen] = useState(false);
+  const [onlyLow, setOnlyLow] = useState(false);
 
   const { data: products = [] } = useQuery({ queryKey: ["products"], queryFn: listProducts });
   const { data: categories = [] } = useQuery({ queryKey: ["categories"], queryFn: listCategories });
+  const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: getSettings });
+
+  const threshold = lowStockThreshold(settings);
+  const lowStockItems = products.filter((p) => isLowStock(p, threshold) || p.stock === 0);
+  const visibleProducts = onlyLow ? lowStockItems : products;
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["products"] });
@@ -137,8 +145,25 @@ function ProdukPage() {
         </Button>
       </div>
 
+      {(lowStockItems.length > 0 || onlyLow) && (
+        <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3">
+          <p className="text-xs font-medium text-amber-900">
+            <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />
+            {lowStockItems.length} produk perlu di-restock (ambang {threshold}).
+          </p>
+          <Button
+            size="sm"
+            variant={onlyLow ? "default" : "outline"}
+            className="h-8 shrink-0"
+            onClick={() => setOnlyLow((v) => !v)}
+          >
+            {onlyLow ? "Tampilkan semua" : "Stok menipis"}
+          </Button>
+        </div>
+      )}
+
       <div className="space-y-2">
-        {products.map((p) => {
+        {visibleProducts.map((p) => {
           const cat = categories.find((c) => c.id === p.category_id);
           return (
             <div
@@ -159,7 +184,7 @@ function ProdukPage() {
                   {p.cost_price === null ? " · HPP belum diisi" : ` · HPP ${rupiah(p.cost_price)}`}
                   {cat ? ` · ${cat.name}` : ""}
                 </p>
-                <StockBadge stock={p.stock} />
+                <StockBadge product={p} threshold={threshold} />
               </div>
               <Button
                 size="icon"
@@ -322,13 +347,20 @@ function ProdukPage() {
   );
 }
 
-function StockBadge({ stock }: { stock: number | null }) {
+function StockBadge({ product, threshold }: { product: Product; threshold: number }) {
+  const stock = product.stock;
   if (stock === null)
     return <span className="text-[11px] text-muted-foreground">Stok tidak terbatas</span>;
   if (stock === 0)
     return (
       <span className="inline-flex rounded bg-destructive px-1.5 py-0.5 text-[10px] font-bold text-destructive-foreground">
         Stok Habis
+      </span>
+    );
+  if (isLowStock(product, threshold))
+    return (
+      <span className="inline-flex rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+        Stok menipis · {stock}
       </span>
     );
   return <span className="text-[11px] font-medium text-foreground">Stok {stock}</span>;

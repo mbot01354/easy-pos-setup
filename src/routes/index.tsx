@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, Trash2, Plus, Minus, ShoppingCart } from "lucide-react";
+import { Search, Trash2, Plus, Minus, ShoppingCart, Percent } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/pos/AppShell";
@@ -30,6 +30,7 @@ import type {
   TransactionItem,
 } from "@/lib/db/types";
 import { rupiah } from "@/lib/format";
+import { DISCOUNT_PRESETS, isLowStock, lowStockThreshold } from "@/lib/stock";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -93,6 +94,7 @@ function KasirPage() {
   const { data: shifts = [] } = useQuery({ queryKey: ["shifts"], queryFn: listShifts });
 
   const closedShifts = shifts.filter((s) => s.status === "closed");
+  const lowThreshold = lowStockThreshold(settings);
 
   const filtered = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
@@ -129,7 +131,9 @@ function KasirPage() {
   const setStoreDiscount = (productId: string, percent: number) => {
     setCart((prev) =>
       prev.map((l) =>
-        l.product.id === productId ? { ...l, discount_percent: Math.min(100, Math.max(0, percent)) } : l,
+        l.product.id === productId
+          ? { ...l, discount_percent: Math.min(100, Math.max(0, percent)) }
+          : l,
       ),
     );
   };
@@ -296,6 +300,10 @@ function KasirPage() {
                   <span className="mt-1 inline-flex w-fit rounded bg-destructive px-1.5 py-0.5 text-[10px] font-bold text-destructive-foreground">
                     Stok Habis
                   </span>
+                ) : isLowStock(p, lowThreshold) ? (
+                  <span className="mt-1 inline-flex w-fit rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                    Stok menipis · {p.stock}
+                  </span>
                 ) : (
                   <span className="mt-1 text-[11px] text-muted-foreground">
                     {p.stock === null ? "Stok tidak terbatas" : `Sisa ${p.stock}`}
@@ -339,51 +347,109 @@ function KasirPage() {
                 Keranjang masih kosong.
               </p>
             ) : (
-              cart.map((line) => (
-                <div key={line.product.id} className="flex items-center gap-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold">{line.product.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {rupiah(line.product.sell_price)} × {line.qty}
-                    </p>
+              cart.map((line) => {
+                const gross = line.qty * line.product.sell_price;
+                const disc = Math.round((gross * line.discount_percent) / 100);
+                return (
+                  <div key={line.product.id} className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold">{line.product.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {rupiah(line.product.sell_price)} × {line.qty}
+                          {line.discount_percent > 0 && (
+                            <>
+                              {" "}
+                              <span className="line-through">{rupiah(gross)}</span>{" "}
+                              <span className="font-semibold text-primary">
+                                {rupiah(gross - disc)}
+                              </span>
+                            </>
+                          )}
+                        </p>
+                      </div>
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        onClick={() => setQty(line.product.id, line.qty - 1)}
+                      >
+                        <Minus className="h-4 w-4" />
+                      </Button>
+                      <button
+                        type="button"
+                        onClick={() => setNumpadFor(line)}
+                        className="min-w-12 rounded-md border border-border px-2 py-2 text-center text-base font-bold tabular-nums"
+                      >
+                        {line.qty}
+                      </button>
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        onClick={() => {
+                          if (line.product.stock !== null && line.qty + 1 > line.product.stock) {
+                            toast.error(`Stok tinggal ${line.product.stock}`);
+                            return;
+                          }
+                          setQty(line.product.id, line.qty + 1);
+                        }}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => setQty(line.product.id, 0)}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setDiscountFor(line)}
+                      className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-semibold ${
+                        line.discount_percent > 0
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border text-muted-foreground"
+                      }`}
+                    >
+                      <Percent className="h-3 w-3" />
+                      {line.discount_percent > 0
+                        ? `Diskon ${line.discount_percent}% (-${rupiah(disc)})`
+                        : "Diskon item"}
+                    </button>
                   </div>
-                  <Button
-                    size="icon"
-                    variant="outline"
-                    onClick={() => setQty(line.product.id, line.qty - 1)}
-                  >
-                    <Minus className="h-4 w-4" />
-                  </Button>
-                  <button
-                    type="button"
-                    onClick={() => setNumpadFor(line)}
-                    className="min-w-12 rounded-md border border-border px-2 py-2 text-center text-base font-bold tabular-nums"
-                  >
-                    {line.qty}
-                  </button>
-                  <Button
-                    size="icon"
-                    variant="outline"
-                    onClick={() => {
-                      if (line.product.stock !== null && line.qty + 1 > line.product.stock) {
-                        toast.error(`Stok tinggal ${line.product.stock}`);
-                        return;
-                      }
-                      setQty(line.product.id, line.qty + 1);
-                    }}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                  <Button size="icon" variant="ghost" onClick={() => setQty(line.product.id, 0)}>
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 
           <div className="shrink-0 border-t border-border bg-card px-4 pb-5 pt-3">
-            <div className="flex items-center justify-between">
+            <div className="space-y-1 text-sm">
+              <div className="flex items-center justify-between text-muted-foreground">
+                <span>Subtotal</span>
+                <span className="tabular-nums">{rupiah(subtotal)}</span>
+              </div>
+              {itemDiscTotal > 0 && (
+                <div className="flex items-center justify-between text-muted-foreground">
+                  <span>Diskon item</span>
+                  <span className="tabular-nums">-{rupiah(itemDiscTotal)}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setTxDiscOpen(true)}
+                  className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-1 text-[11px] font-semibold text-muted-foreground"
+                >
+                  <Percent className="h-3 w-3" />
+                  Diskon transaksi{txPercent > 0 ? ` ${txPercent}%` : ""}
+                </button>
+                <span className="tabular-nums text-muted-foreground">
+                  {txDiscTotal > 0 ? `-${rupiah(txDiscTotal)}` : rupiah(0)}
+                </span>
+              </div>
+            </div>
+            <div className="mt-2 flex items-center justify-between border-t border-border pt-2">
               <span className="text-sm text-muted-foreground">Total</span>
               <span className="text-2xl font-extrabold text-foreground">{rupiah(totalOmset)}</span>
             </div>
@@ -417,6 +483,32 @@ function KasirPage() {
         onSubmit={(value) => {
           if (numpadFor) setQty(numpadFor.product.id, value);
           setNumpadFor(null);
+        }}
+      />
+
+      <NumpadDialog
+        open={discountFor !== null}
+        title={`Diskon % — ${discountFor?.product.name ?? ""}`}
+        initialValue={discountFor?.discount_percent ?? 0}
+        max={100}
+        presets={DISCOUNT_PRESETS}
+        onClose={() => setDiscountFor(null)}
+        onSubmit={(value) => {
+          if (discountFor) setStoreDiscount(discountFor.product.id, value);
+          setDiscountFor(null);
+        }}
+      />
+
+      <NumpadDialog
+        open={txDiscOpen}
+        title="Diskon transaksi (%)"
+        initialValue={txPercent}
+        max={100}
+        presets={DISCOUNT_PRESETS}
+        onClose={() => setTxDiscOpen(false)}
+        onSubmit={(value) => {
+          setTxPercent(Math.min(100, Math.max(0, Math.round(value))));
+          setTxDiscOpen(false);
         }}
       />
 

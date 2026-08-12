@@ -9,12 +9,14 @@ import { Label } from "@/components/ui/label";
 import { saveSettings } from "@/lib/db/pos-db";
 import type { StoreSettings } from "@/lib/db/types";
 import { fileToCompressedDataUrl } from "@/lib/image";
+import { DEFAULT_LOW_STOCK_THRESHOLD } from "@/lib/stock";
 
 export function StoreIdentityForm({ settings }: { settings: StoreSettings | undefined }) {
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [type, setType] = useState("");
   const [logo, setLogo] = useState<string | null>(null);
+  const [threshold, setThreshold] = useState("5");
   const [saving, setSaving] = useState(false);
   const initialized = useRef(false);
 
@@ -24,6 +26,7 @@ export function StoreIdentityForm({ settings }: { settings: StoreSettings | unde
     setName(settings.store_name);
     setType(settings.business_type);
     setLogo(settings.logo_path);
+    setThreshold(String(settings.low_stock_threshold ?? DEFAULT_LOW_STOCK_THRESHOLD));
   }, [settings]);
 
   const pickLogo = async (file: File | undefined) => {
@@ -40,6 +43,11 @@ export function StoreIdentityForm({ settings }: { settings: StoreSettings | unde
       toast.error("Nama toko wajib diisi");
       return;
     }
+    const parsedThreshold = Number.parseInt(threshold, 10);
+    if (Number.isNaN(parsedThreshold) || parsedThreshold < 0) {
+      toast.error("Ambang stok menipis harus angka 0 atau lebih");
+      return;
+    }
     setSaving(true);
     try {
       await saveSettings({
@@ -49,6 +57,8 @@ export function StoreIdentityForm({ settings }: { settings: StoreSettings | unde
         store_name: name.trim(),
         business_type: type.trim(),
         logo_path: logo,
+        ...(settings?.seeded !== undefined ? { seeded: settings.seeded } : {}),
+        low_stock_threshold: parsedThreshold,
       });
       await queryClient.invalidateQueries({ queryKey: ["settings"] });
       toast.success("Identitas toko tersimpan");
@@ -113,6 +123,20 @@ export function StoreIdentityForm({ settings }: { settings: StoreSettings | unde
             placeholder="Warung Makan"
             className="mt-1 h-11"
           />
+        </div>
+        <div>
+          <Label htmlFor="low-stock">Ambang stok menipis</Label>
+          <Input
+            id="low-stock"
+            inputMode="numeric"
+            value={threshold}
+            onChange={(e) => setThreshold(e.target.value.replace(/\D/g, ""))}
+            placeholder="5"
+            className="mt-1 h-11"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Produk dengan sisa stok sampai angka ini ditandai &quot;Stok menipis&quot;.
+          </p>
         </div>
       </div>
 

@@ -265,21 +265,30 @@ function RiwayatPage() {
                 {dateLabel(detail.timestamp)} · {timeLabel(detail.timestamp)}
               </p>
               <div className="space-y-2">
-                {detailItems.map((item) => (
-                  <div key={item.id} className="flex items-start justify-between gap-3 text-sm">
-                    <div className="min-w-0">
-                      <p className="font-semibold">{item.product_name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {rupiah(item.price_at_sale)} × {item.qty}
-                      </p>
+                {detailItems.map((item) => {
+                  const gross = item.price_at_sale * item.qty;
+                  const disc = Math.round((gross * (item.discount_percent ?? 0)) / 100);
+                  return (
+                    <div key={item.id} className="flex items-start justify-between gap-3 text-sm">
+                      <div className="min-w-0">
+                        <p className="font-semibold">{item.product_name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {rupiah(item.price_at_sale)} × {item.qty}
+                          {disc > 0 && ` · diskon ${item.discount_percent}% (-${rupiah(disc)})`}
+                        </p>
+                      </div>
+                      <span className="font-semibold tabular-nums">{rupiah(gross - disc)}</span>
                     </div>
-                    <span className="font-semibold tabular-nums">
-                      {rupiah(item.price_at_sale * item.qty)}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
               <div className="space-y-1 border-t border-border pt-3 text-sm">
+                {(detail.discount_total ?? 0) > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Total diskon</span>
+                    <span className="font-semibold">-{rupiah(detail.discount_total ?? 0)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Total</span>
                   <span className="text-lg font-extrabold">{rupiah(detail.total_omset)}</span>

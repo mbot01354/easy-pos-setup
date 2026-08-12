@@ -139,20 +139,21 @@ function LaporanPage() {
       else itemsByTx.set(item.transaction_id, [item]);
     }
 
-    // Omset & laba dihitung dari item (bukan field transaksi) agar konsisten dan
-    // laba tidak mengasumsikan HPP=0 untuk produk tanpa HPP (PRD §4.5).
+    // Omset sudah net diskon (disimpan di transaksi). Laba memakai total_laba
+    // transaksi agar diskon item + diskon transaksi ikut terhitung, dan produk
+    // tanpa HPP tidak diasumsikan HPP=0 (PRD §4.5).
     let omset = 0;
     let laba = 0;
     let totalHpp = 0;
     let qtyTotal = 0;
+    let diskon = 0;
     for (const t of active) {
       omset += t.total_omset;
+      laba += t.total_laba;
+      diskon += t.discount_total ?? 0;
       for (const it of itemsByTx.get(t.id) ?? []) {
         qtyTotal += it.qty;
-        if (it.hpp_at_sale !== null) {
-          laba += (it.price_at_sale - it.hpp_at_sale) * it.qty;
-          totalHpp += it.hpp_at_sale * it.qty;
-        }
+        if (it.hpp_at_sale !== null) totalHpp += it.hpp_at_sale * it.qty;
       }
     }
     const someMissing = active.some((t) => t.has_missing_hpp);
@@ -172,9 +173,11 @@ function LaporanPage() {
           has_missing_hpp: false,
         };
         const missing = item.hpp_at_sale === null;
+        const gross = item.price_at_sale * item.qty;
+        const net = gross - Math.round((gross * (item.discount_percent ?? 0)) / 100);
         cur.qty += item.qty;
-        cur.omset += item.price_at_sale * item.qty;
-        if (!missing) cur.laba += (item.price_at_sale - (item.hpp_at_sale ?? 0)) * item.qty;
+        cur.omset += net;
+        if (!missing) cur.laba += net - (item.hpp_at_sale ?? 0) * item.qty;
         cur.has_missing_hpp = cur.has_missing_hpp || missing;
         rankMap.set(item.product_id, cur);
       }
@@ -213,6 +216,7 @@ function LaporanPage() {
       laba,
       totalHpp,
       qtyTotal,
+      diskon,
       someMissing,
       spanDays,
       hours,
@@ -328,6 +332,11 @@ function LaporanPage() {
               label="Margin"
               value={report.omset > 0 ? `${Math.round((report.laba / report.omset) * 100)}%` : "0%"}
               sub="laba terhadap omset"
+            />
+            <StatCard
+              label="Total Diskon"
+              value={rupiah(report.diskon)}
+              sub="diskon item + transaksi"
             />
           </div>
 
