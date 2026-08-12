@@ -216,6 +216,7 @@ function LaporanPage() {
       laba,
       totalHpp,
       qtyTotal,
+      diskon,
       someMissing,
       spanDays,
       hours,
@@ -331,6 +332,11 @@ function LaporanPage() {
               label="Margin"
               value={report.omset > 0 ? `${Math.round((report.laba / report.omset) * 100)}%` : "0%"}
               sub="laba terhadap omset"
+            />
+            <StatCard
+              label="Total Diskon"
+              value={rupiah(report.diskon)}
+              sub="diskon item + transaksi"
             />
           </div>
 
