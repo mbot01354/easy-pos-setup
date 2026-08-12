@@ -30,6 +30,7 @@ import type {
   TransactionItem,
 } from "@/lib/db/types";
 import { rupiah } from "@/lib/format";
+import { DISCOUNT_PRESETS, isLowStock, lowStockThreshold } from "@/lib/stock";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -93,6 +94,7 @@ function KasirPage() {
   const { data: shifts = [] } = useQuery({ queryKey: ["shifts"], queryFn: listShifts });
 
   const closedShifts = shifts.filter((s) => s.status === "closed");
+  const lowThreshold = lowStockThreshold(settings);
 
   const filtered = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
