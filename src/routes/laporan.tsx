@@ -509,13 +509,37 @@ function LaporanPage() {
             )}
           </section>
 
+          <section className="print-hide grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={exportCsv}
+              className="h-12 rounded-xl bg-secondary text-sm font-bold text-secondary-foreground"
+            >
+              Ekspor CSV / Excel
+            </button>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="h-12 rounded-xl bg-primary text-sm font-bold text-primary-foreground"
+            >
+              Cetak / Simpan PDF
+            </button>
+          </section>
+
           <p className="pb-2 text-center text-xs text-muted-foreground">
             Semua data dihitung dari transaksi yang tersimpan di perangkat ini.
           </p>
+
+          <ReportSheet
+            storeName={settings?.store_name ?? "Toko Saya"}
+            periodLabel={periodLabel}
+            data={report}
+          />
         </div>
       )}
     </AppShell>
   );
+
 }
 
 function StatCard({
