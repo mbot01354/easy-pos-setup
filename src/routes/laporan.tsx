@@ -13,10 +13,13 @@ import {
 } from "recharts";
 
 import { AppShell } from "@/components/pos/AppShell";
+import { ReportSheet } from "@/components/pos/ReportSheet";
 import { Input } from "@/components/ui/input";
-import { listAllTransactionItems, listTransactions } from "@/lib/db/pos-db";
+import { getSettings, listAllTransactionItems, listTransactions } from "@/lib/db/pos-db";
 import type { Transaction, TransactionItem } from "@/lib/db/types";
+import { downloadCsv } from "@/lib/csv";
 import { rupiah } from "@/lib/format";
+
 
 export const Route = createFileRoute("/laporan")({
   head: () => ({
@@ -123,6 +126,8 @@ function LaporanPage() {
     queryKey: ["all-transaction-items"],
     queryFn: listAllTransactionItems,
   });
+  const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: getSettings });
+
 
   const report = useMemo(() => {
     const customFromTs = customFrom ? new Date(`${customFrom}T00:00:00`).getTime() : null;
@@ -227,12 +232,55 @@ function LaporanPage() {
 
   const wide = Math.max(320, report.hours.length * 22);
 
+  const periodLabel =
+    range === "today"
+      ? "Hari ini"
+      : range === "7d"
+        ? "7 hari terakhir"
+        : range === "30d"
+          ? "30 hari terakhir"
+          : range === "all"
+            ? "Semua waktu"
+            : `${customFrom || "-"} s/d ${customTo || "-"}`;
+
+  const exportCsv = () => {
+    const rows: Array<Array<string | number>> = [
+      [settings?.store_name ?? "Toko Saya"],
+      ["Laporan Penjualan", periodLabel],
+      ["Dicetak", new Date().toLocaleString("id-ID")],
+      [],
+      ["Ringkasan"],
+      ["Omset", report.omset],
+      ["Jumlah transaksi", report.count],
+      ["Item terjual", report.qtyTotal],
+      ["Rata-rata per hari", report.spanDays > 0 ? Math.round(report.omset / report.spanDays) : 0],
+      ["Total diskon", report.diskon],
+      ["Total HPP", report.totalHpp],
+      ["Laba kotor", report.laba],
+      ["Margin (%)", report.omset > 0 ? Math.round((report.laba / report.omset) * 100) : 0],
+      [],
+      ["Produk terlaris"],
+      ["#", "Produk", "Qty", "Omset", "Laba"],
+      ...report.leaderboard.map((p, i) => [i + 1, p.name, p.qty, p.omset, p.laba]),
+      [],
+      ["Omset per hari"],
+      ["Hari", "Transaksi", "Omset"],
+      ...report.weekdays.map((d) => [d.label, d.transaksi, d.omset]),
+      [],
+      ["Omset per jam"],
+      ["Jam", "Transaksi", "Omset"],
+      ...report.hours.map((h) => [h.label, h.transaksi, h.omset]),
+    ];
+    downloadCsv(`laporan-${fmtDate(Date.now())}.csv`, rows);
+  };
+
   const pickCustom = () => {
     if (range === "custom") return;
     setRange("custom");
     if (!customFrom) setCustomFrom(fmtDate(Date.now() - 30 * DAY));
     if (!customTo) setCustomTo(fmtDate(Date.now()));
   };
+
 
   return (
     <AppShell title="Laporan">
@@ -461,13 +509,37 @@ function LaporanPage() {
             )}
           </section>
 
+          <section className="print-hide grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={exportCsv}
+              className="h-12 rounded-xl bg-secondary text-sm font-bold text-secondary-foreground"
+            >
+              Ekspor CSV / Excel
+            </button>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="h-12 rounded-xl bg-primary text-sm font-bold text-primary-foreground"
+            >
+              Cetak / Simpan PDF
+            </button>
+          </section>
+
           <p className="pb-2 text-center text-xs text-muted-foreground">
             Semua data dihitung dari transaksi yang tersimpan di perangkat ini.
           </p>
+
+          <ReportSheet
+            storeName={settings?.store_name ?? "Toko Saya"}
+            periodLabel={periodLabel}
+            data={report}
+          />
         </div>
       )}
     </AppShell>
   );
+
 }
 
 function StatCard({

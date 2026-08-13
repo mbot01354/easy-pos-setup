@@ -166,18 +166,21 @@
   }
 }
 
-/* Cetak: hanya area struk yang keluar di kertas */
+/* Cetak: hanya area struk / lembar laporan yang keluar di kertas */
 @media print {
   body * {
     visibility: hidden;
   }
 
   #receipt-area,
-  #receipt-area * {
+  #receipt-area *,
+  #print-area,
+  #print-area * {
     visibility: visible;
   }
 
-  #receipt-area {
+  #receipt-area,
+  #print-area {
     position: fixed;
     inset: 0 auto auto 0;
     width: 100%;
@@ -185,9 +188,11 @@
     padding: 0;
     background: #fff;
     color: #000;
+    display: block !important;
   }
 
   .print-hide {
     display: none !important;
   }
 }
+
