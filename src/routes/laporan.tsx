@@ -230,12 +230,55 @@ function LaporanPage() {
 
   const wide = Math.max(320, report.hours.length * 22);
 
+  const periodLabel =
+    range === "today"
+      ? "Hari ini"
+      : range === "7d"
+        ? "7 hari terakhir"
+        : range === "30d"
+          ? "30 hari terakhir"
+          : range === "all"
+            ? "Semua waktu"
+            : `${customFrom || "-"} s/d ${customTo || "-"}`;
+
+  const exportCsv = () => {
+    const rows: Array<Array<string | number>> = [
+      [settings?.store_name ?? "Toko Saya"],
+      ["Laporan Penjualan", periodLabel],
+      ["Dicetak", new Date().toLocaleString("id-ID")],
+      [],
+      ["Ringkasan"],
+      ["Omset", report.omset],
+      ["Jumlah transaksi", report.count],
+      ["Item terjual", report.qtyTotal],
+      ["Rata-rata per hari", report.spanDays > 0 ? Math.round(report.omset / report.spanDays) : 0],
+      ["Total diskon", report.diskon],
+      ["Total HPP", report.totalHpp],
+      ["Laba kotor", report.laba],
+      ["Margin (%)", report.omset > 0 ? Math.round((report.laba / report.omset) * 100) : 0],
+      [],
+      ["Produk terlaris"],
+      ["#", "Produk", "Qty", "Omset", "Laba"],
+      ...report.leaderboard.map((p, i) => [i + 1, p.name, p.qty, p.omset, p.laba]),
+      [],
+      ["Omset per hari"],
+      ["Hari", "Transaksi", "Omset"],
+      ...report.weekdays.map((d) => [d.label, d.transaksi, d.omset]),
+      [],
+      ["Omset per jam"],
+      ["Jam", "Transaksi", "Omset"],
+      ...report.hours.map((h) => [h.label, h.transaksi, h.omset]),
+    ];
+    downloadCsv(`laporan-${fmtDate(Date.now())}.csv`, rows);
+  };
+
   const pickCustom = () => {
     if (range === "custom") return;
     setRange("custom");
     if (!customFrom) setCustomFrom(fmtDate(Date.now() - 30 * DAY));
     if (!customTo) setCustomTo(fmtDate(Date.now()));
   };
+
 
   return (
     <AppShell title="Laporan">
