@@ -126,6 +126,8 @@ function LaporanPage() {
     queryKey: ["all-transaction-items"],
     queryFn: listAllTransactionItems,
   });
+  const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: getSettings });
+
 
   const report = useMemo(() => {
     const customFromTs = customFrom ? new Date(`${customFrom}T00:00:00`).getTime() : null;
